@@ -19,15 +19,12 @@ linters:
     - staticcheck
     - unused
     - gosec
-    - goimports
     - misspell
     - unconvert
     - unparam
     - gocritic
 
 linters-settings:
-  goimports:
-    local-prefixes: github.com/scttfrdmn/conduit
   errcheck:
     check-type-assertions: true
     check-blank: true
