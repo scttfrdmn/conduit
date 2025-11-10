@@ -4,8 +4,7 @@ run:
   go: "1.23"
 
 output:
-  formats:
-    - format: colored-line-number
+  format: colored-line-number
 
 linters:
   enable:
