@@ -30,7 +30,7 @@ Examples:
 			fmt.Println(info.String())
 			return
 		}
-		cmd.Help()
+		_ = cmd.Help() // Ignore error as we're already in error handler context
 	},
 }
 
