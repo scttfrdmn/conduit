@@ -1,0 +1,164 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+    - go generate ./...
+
+builds:
+  - id: conduit
+    main: ./cmd/conduit
+    binary: conduit
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    ldflags:
+      - -s -w
+      - -X github.com/scttfrdmn/conduit/internal/version.Version={{.Version}}
+      - -X github.com/scttfrdmn/conduit/internal/version.Commit={{.Commit}}
+      - -X github.com/scttfrdmn/conduit/internal/version.Date={{.Date}}
+      - -X github.com/scttfrdmn/conduit/internal/version.BuiltBy=goreleaser
+
+archives:
+  - id: conduit
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - 'typo'
+      - 'Merge pull request'
+      - 'Merge branch'
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: 'Refactors'
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: 'Documentation'
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 4
+    - title: 'Build'
+      regexp: '^.*?build(\([[:word:]]+\))??!?:.+$'
+      order: 5
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: scttfrdmn
+    name: conduit
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  footer: |
+    ## Installation
+
+    ### Homebrew (macOS/Linux)
+    ```bash
+    brew install scttfrdmn/tap/conduit
+    ```
+
+    ### Script (macOS/Linux)
+    ```bash
+    curl -sSL https://get.conduit.dev | bash
+    ```
+
+    ### Manual
+    Download the appropriate binary for your platform from the assets below.
+
+# Homebrew
+brews:
+  - name: conduit
+    repository:
+      owner: scttfrdmn
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://github.com/scttfrdmn/conduit
+    description: AWS-native platform for scientific ML model publishing and deployment
+    license: Apache-2.0
+    install: |
+      bin.install "conduit"
+    test: |
+      system "#{bin}/conduit --version"
+
+# Docker images
+dockers:
+  - image_templates:
+      - "ghcr.io/scttfrdmn/conduit:{{ .Version }}-amd64"
+      - "ghcr.io/scttfrdmn/conduit:latest-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+  - image_templates:
+      - "ghcr.io/scttfrdmn/conduit:{{ .Version }}-arm64"
+      - "ghcr.io/scttfrdmn/conduit:latest-arm64"
+    use: buildx
+    goarch: arm64
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
+docker_manifests:
+  - name_template: "ghcr.io/scttfrdmn/conduit:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/scttfrdmn/conduit:{{ .Version }}-amd64"
+      - "ghcr.io/scttfrdmn/conduit:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/scttfrdmn/conduit:latest"
+    image_templates:
+      - "ghcr.io/scttfrdmn/conduit:latest-amd64"
+      - "ghcr.io/scttfrdmn/conduit:latest-arm64"
+
+announce:
+  skip: true
