@@ -15,6 +15,7 @@ type Model struct {
 
 	// Related data (not from DB directly)
 	LatestVersion *ModelVersion `db:"-"`
+	Citation      *Citation     `db:"-"`
 	Tags          []string      `db:"-"`
 }
 

@@ -134,6 +134,13 @@ func (db *DB) GetModel(name string) (*Model, error) {
 	}
 	m.LatestVersion = version
 
+	// Load citation
+	citation, err := db.getCitation(m.ID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to load citation: %w", err)
+	}
+	m.Citation = citation
+
 	return &m, nil
 }
 
@@ -202,6 +209,24 @@ func (db *DB) getBenchmarks(versionID int64) ([]Benchmark, error) {
 	}
 
 	return benchmarks, rows.Err()
+}
+
+// getCitation retrieves citation information for a model
+func (db *DB) getCitation(modelID int64) (*Citation, error) {
+	var c Citation
+	err := db.conn.QueryRow(`
+		SELECT id, model_id, paper_title, paper_url, doi, authors, year, bibtex
+		FROM citations
+		WHERE model_id = ?
+	`, modelID).Scan(
+		&c.ID, &c.ModelID, &c.PaperTitle, &c.PaperURL,
+		&c.DOI, &c.Authors, &c.Year, &c.BibTeX,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
 }
 
 // ListModels retrieves all models with pagination
