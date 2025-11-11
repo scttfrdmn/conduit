@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Model.yaml parser with `ParseFile()`, `Parse()`, and `ParseString()` methods
+- Comprehensive validator with clear error messages
+  - Name format validation (lowercase-with-hyphens)
+  - Semantic version validation (semver 2.0)
+  - URI validation (s3://, hf://, https://)
+  - Framework validation against allowed list
+  - Hardware requirements validation
+  - Benchmark data validation
+- CLI `validate` command for model.yaml files
+- Example model.yaml demonstrating all fields
+- Test suite with 73.3% coverage for model package
 
 ### Changed
 
