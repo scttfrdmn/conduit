@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite for init command
 
 ### Changed
+- CI pipeline now tests only Go 1.23 (previously tested 1.22 and 1.23)
 
 ### Deprecated
 
