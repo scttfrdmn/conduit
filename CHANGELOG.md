@@ -17,8 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Hardware requirements validation
   - Benchmark data validation
 - CLI `validate` command for model.yaml files
+- CLI `init` command to scaffold new model projects
+  - Interactive prompts for model metadata
+  - Automatic directory structure generation (inference/, weights/, tests/)
+  - Template files (inference.py, requirements.txt, test_inference.py, README.md)
+  - Framework-specific requirements templates
+  - Support for all major ML frameworks (PyTorch, TensorFlow, JAX, ONNX)
+  - --force flag to overwrite existing files
 - Example model.yaml demonstrating all fields
 - Test suite with 73.3% coverage for model package
+- Comprehensive test suite for init command
 
 ### Changed
 

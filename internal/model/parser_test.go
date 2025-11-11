@@ -193,7 +193,7 @@ hardware:
   recommended_instance: ml.g5.xlarge
 `
 
-	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil { //nolint:gosec // Test file creation
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
