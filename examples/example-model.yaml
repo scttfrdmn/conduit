@@ -1,0 +1,81 @@
+# Example model.yaml for Conduit
+# This demonstrates a complete model specification
+
+name: example-protein-model
+version: "1.0.0"
+domain: protein-science
+
+description: |
+  Example protein structure prediction model demonstrating
+  the complete model.yaml specification format.
+
+# GitHub repository (optional but recommended)
+github_repo: yourorg/example-protein-model
+
+# License information
+license: MIT
+
+# Runtime configuration
+runtime:
+  framework: pytorch
+  python_version: "3.11"
+  dependencies: requirements.txt
+  # custom_image: docker.io/yourorg/custom-image:latest  # optional
+
+# Model artifacts
+weights_uri: s3://your-bucket/weights/v1.0.0/
+weights_size_gb: 3.5
+checksum_sha256: abc123def456...  # optional but recommended
+
+# Inference configuration
+inference:
+  entrypoint: inference.py
+  handler: predict
+  # input_schema and output_schema are optional
+  # input_schema:
+  #   sequence: string
+  #   num_recycles: integer
+  # output_schema:
+  #   structure: string
+  #   confidence: array
+
+# Hardware requirements
+hardware:
+  gpu_required: true
+  recommended_instance: ml.g5.2xlarge
+  min_cpu: 4
+  min_memory_gb: 16
+  min_gpu_memory_gb: 16
+
+# Benchmarks (optional but recommended)
+benchmarks:
+  - dataset: CASP15
+    metric: GDT-TS
+    result: 92.4
+    instance: ml.g5.2xlarge
+    cost_per_prediction: "$0.15"
+    walltime_seconds: 120.5
+
+  - dataset: CAMEO
+    metric: TM-score
+    result: 0.85
+    instance: ml.g5.2xlarge
+    cost_per_prediction: "$0.15"
+    walltime_seconds: 115.0
+
+# Citation information (optional but recommended)
+citation:
+  paper_title: "Example Protein Structure Prediction Method"
+  paper_url: https://doi.org/10.1000/example
+  doi: 10.1000/example
+  authors:
+    - Jane Doe
+    - John Smith
+  year: 2024
+  bibtex: |
+    @article{doe2024example,
+      title={Example Protein Structure Prediction Method},
+      author={Doe, Jane and Smith, John},
+      journal={Nature},
+      year={2024}
+    }
