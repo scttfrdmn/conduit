@@ -42,7 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Filter by domain, framework, GPU requirement
   - Pagination and result limiting
   - User-friendly result display
-- Comprehensive test suite for catalog operations (9 tests)
+- CLI `info` command to view detailed model information
+  - Display model metadata, version details, and hardware requirements
+  - Show benchmark results and performance metrics
+  - Display citation information with formatted author list
+  - Comprehensive view of all model attributes
+- Comprehensive test suite for catalog operations (10 tests)
 
 ### Changed
 - CI pipeline now tests only Go 1.23 (previously tested 1.22 and 1.23)

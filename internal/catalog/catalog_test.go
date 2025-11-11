@@ -423,6 +423,68 @@ func createTestModelWithDetails(name, domain, framework string, gpuRequired bool
 	return m
 }
 
+func TestGetModel_WithCitation(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	model := &types.Model{
+		Name:        "cited-model",
+		Version:     "1.0.0",
+		Domain:      "protein-science",
+		Description: "Model with citation",
+		Runtime: types.Runtime{
+			Framework:     "pytorch",
+			PythonVersion: "3.11",
+		},
+		Inference: types.Inference{
+			Entrypoint: "inference.py",
+			Handler:    "predict",
+		},
+		WeightsURI: "s3://test/weights",
+		Citation: types.Citation{
+			PaperTitle: "Test Paper",
+			Authors:    []string{"Author A", "Author B"},
+			Year:       2024,
+			DOI:        "10.1234/test",
+			PaperURL:   "https://example.com/paper",
+			BibTeX:     "@article{test2024, title={Test Paper}}",
+		},
+	}
+
+	_, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Retrieve and check citation
+	retrieved, err := db.GetModel("cited-model")
+	if err != nil {
+		t.Fatalf("GetModel() error = %v", err)
+	}
+
+	if retrieved.Citation == nil {
+		t.Fatal("Citation is nil")
+	}
+
+	c := retrieved.Citation
+	if c.PaperTitle != "Test Paper" {
+		t.Errorf("PaperTitle = %v, want Test Paper", c.PaperTitle)
+	}
+
+	if c.Year != 2024 {
+		t.Errorf("Year = %v, want 2024", c.Year)
+	}
+
+	if c.DOI != "10.1234/test" {
+		t.Errorf("DOI = %v, want 10.1234/test", c.DOI)
+	}
+
+	// Authors should be joined by comma in database
+	if c.Authors != "Author A, Author B" {
+		t.Errorf("Authors = %v, want 'Author A, Author B'", c.Authors)
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
