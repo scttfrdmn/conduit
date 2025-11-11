@@ -27,6 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example model.yaml demonstrating all fields
 - Test suite with 73.3% coverage for model package
 - Comprehensive test suite for init command
+- Model catalog with SQLite database backend
+  - Database schema for models, versions, benchmarks, and citations
+  - CRUD operations for model registry
+  - Full-text search across model metadata
+  - Filter by domain, framework, and GPU requirements
+  - Automatic schema initialization and migrations
+- CLI `publish` command to register models in catalog
+  - Validates model.yaml before registration
+  - Checks for existing models
+  - Stores model metadata and benchmarks
+- CLI `search` command to query catalog
+  - Search by keyword across names, domains, descriptions
+  - Filter by domain, framework, GPU requirement
+  - Pagination and result limiting
+  - User-friendly result display
+- Comprehensive test suite for catalog operations (9 tests)
 
 ### Changed
 - CI pipeline now tests only Go 1.23 (previously tested 1.22 and 1.23)
