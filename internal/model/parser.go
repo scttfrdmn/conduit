@@ -21,7 +21,7 @@ func NewParser() *Parser {
 
 // ParseFile reads and parses a model.yaml file
 func (p *Parser) ParseFile(path string) (*types.Model, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // User-provided path is expected
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
