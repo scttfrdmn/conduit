@@ -434,6 +434,79 @@ func (db *DB) DeleteModel(name string) error {
 	return nil
 }
 
+// DeleteModelVersion removes a specific version of a model
+func (db *DB) DeleteModelVersion(modelName, version string) error {
+	// Get model ID
+	var modelID int64
+	err := db.conn.QueryRow("SELECT id FROM models WHERE name = ?", modelName).Scan(&modelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("model not found: %s", modelName)
+		}
+		return fmt.Errorf("failed to query model: %w", err)
+	}
+
+	// Check if this is the only version
+	var versionCount int64
+	err = db.conn.QueryRow("SELECT COUNT(*) FROM model_versions WHERE model_id = ?", modelID).Scan(&versionCount)
+	if err != nil {
+		return fmt.Errorf("failed to count versions: %w", err)
+	}
+
+	if versionCount == 1 {
+		return fmt.Errorf("cannot delete the only version of a model. Delete the entire model instead")
+	}
+
+	// Delete the version
+	result, err := db.conn.Exec(`
+		DELETE FROM model_versions
+		WHERE model_id = ? AND version = ?
+	`, modelID, version)
+	if err != nil {
+		return fmt.Errorf("failed to delete version: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("version not found: %s", version)
+	}
+
+	// If we deleted the latest version, mark the most recent remaining version as latest
+	var wasLatest bool
+	err = db.conn.QueryRow(`
+		SELECT NOT EXISTS(
+			SELECT 1 FROM model_versions
+			WHERE model_id = ? AND is_latest = TRUE
+		)
+	`, modelID).Scan(&wasLatest)
+	if err != nil {
+		return fmt.Errorf("failed to check latest status: %w", err)
+	}
+
+	if wasLatest {
+		// Mark the most recent version as latest
+		_, err = db.conn.Exec(`
+			UPDATE model_versions
+			SET is_latest = TRUE
+			WHERE id = (
+				SELECT id FROM model_versions
+				WHERE model_id = ?
+				ORDER BY created_at DESC
+				LIMIT 1
+			)
+		`, modelID)
+		if err != nil {
+			return fmt.Errorf("failed to update latest version: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // CountModels returns the total number of models in the catalog
 func (db *DB) CountModels() (int64, error) {
 	var count int64

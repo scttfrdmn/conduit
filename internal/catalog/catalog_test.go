@@ -655,6 +655,122 @@ func TestGetModelVersion(t *testing.T) {
 	}
 }
 
+func TestDeleteModelVersion(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with multiple versions
+	model := createTestModel("version-delete-test")
+	model.Version = "1.0.0"
+
+	modelID, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Add more versions
+	model.Version = "2.0.0"
+	if err := db.CreateModelVersion(modelID, model); err != nil {
+		t.Fatalf("CreateModelVersion(2.0.0) error = %v", err)
+	}
+
+	model.Version = "3.0.0"
+	if err := db.CreateModelVersion(modelID, model); err != nil {
+		t.Fatalf("CreateModelVersion(3.0.0) error = %v", err)
+	}
+
+	// Delete middle version
+	if err := db.DeleteModelVersion("version-delete-test", "2.0.0"); err != nil {
+		t.Fatalf("DeleteModelVersion(2.0.0) error = %v", err)
+	}
+
+	// Verify it's gone
+	_, err = db.GetModelVersion("version-delete-test", "2.0.0")
+	if err == nil {
+		t.Error("GetModelVersion(2.0.0) should fail after deletion")
+	}
+
+	// Verify other versions still exist
+	v1, err := db.GetModelVersion("version-delete-test", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(1.0.0) error = %v", err)
+	}
+
+	v3, err := db.GetModelVersion("version-delete-test", "3.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(3.0.0) error = %v", err)
+	}
+
+	// Verify latest flag is still correct (3.0.0 should be latest)
+	if !v3.IsLatest {
+		t.Error("Version 3.0.0 should still be latest")
+	}
+
+	if v1.IsLatest {
+		t.Error("Version 1.0.0 should not be latest")
+	}
+}
+
+func TestDeleteModelVersion_LastVersion(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with single version
+	model := createTestModel("single-version-test")
+	_, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Try to delete the only version - should fail
+	err = db.DeleteModelVersion("single-version-test", "1.0.0")
+	if err == nil {
+		t.Error("DeleteModelVersion() should fail when deleting the only version")
+	}
+}
+
+func TestDeleteModelVersion_ReassignLatest(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with multiple versions
+	model := createTestModel("latest-reassign-test")
+	model.Version = "1.0.0"
+
+	modelID, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	model.Version = "2.0.0"
+	if err := db.CreateModelVersion(modelID, model); err != nil {
+		t.Fatalf("CreateModelVersion(2.0.0) error = %v", err)
+	}
+
+	// 2.0.0 should be latest now
+	v2, err := db.GetModelVersion("latest-reassign-test", "2.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(2.0.0) error = %v", err)
+	}
+	if !v2.IsLatest {
+		t.Error("Version 2.0.0 should be latest")
+	}
+
+	// Delete the latest version
+	if err := db.DeleteModelVersion("latest-reassign-test", "2.0.0"); err != nil {
+		t.Fatalf("DeleteModelVersion(2.0.0) error = %v", err)
+	}
+
+	// 1.0.0 should now be marked as latest
+	v1, err := db.GetModelVersion("latest-reassign-test", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(1.0.0) error = %v", err)
+	}
+	if !v1.IsLatest {
+		t.Error("Version 1.0.0 should be marked as latest after deleting 2.0.0")
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }

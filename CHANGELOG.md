@@ -58,13 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows all versions in reverse chronological order
   - Indicates which version is marked as latest
   - Displays creation dates and key attributes
+- CLI `delete` command to remove models from catalog
+  - Delete entire model with all versions
+  - Delete specific version only with --version flag
+  - Safety confirmation prompt (skip with --force)
+  - Prevents deletion of model's only version
+  - Automatic latest version reassignment when deleting latest
 - Model versioning support in catalog
   - CreateModelVersion() method to add new versions
   - GetModelVersion() to retrieve specific version
   - ListModelVersions() to show version history
+  - DeleteModelVersion() to remove specific versions
   - Automatic latest version tracking
   - Version uniqueness validation
-- Comprehensive test suite for catalog operations (13 tests)
+- Comprehensive test suite for catalog operations (16 tests)
 
 ### Changed
 - CI pipeline now tests only Go 1.23 (previously tested 1.22 and 1.23)
