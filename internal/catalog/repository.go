@@ -440,3 +440,184 @@ func (db *DB) CountModels() (int64, error) {
 	err := db.conn.QueryRow("SELECT COUNT(*) FROM models").Scan(&count)
 	return count, err
 }
+
+// CreateModelVersion adds a new version to an existing model
+func (db *DB) CreateModelVersion(modelID int64, m *types.Model) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+			err = fmt.Errorf("transaction error: %w, rollback error: %v", err, rollbackErr)
+		}
+	}()
+
+	// Check if this version already exists
+	var exists bool
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM model_versions
+			WHERE model_id = ? AND version = ?
+		)
+	`, modelID, m.Version).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check version existence: %w", err)
+	}
+
+	if exists {
+		return fmt.Errorf("version %s already exists for this model", m.Version)
+	}
+
+	// Mark all existing versions as not latest
+	_, err = tx.Exec(`
+		UPDATE model_versions
+		SET is_latest = FALSE
+		WHERE model_id = ?
+	`, modelID)
+	if err != nil {
+		return fmt.Errorf("failed to update existing versions: %w", err)
+	}
+
+	// Insert new version
+	versionID, err := db.insertModelVersion(tx, modelID, m)
+	if err != nil {
+		return fmt.Errorf("failed to insert model version: %w", err)
+	}
+
+	// Insert benchmarks
+	for _, benchmark := range m.Benchmarks {
+		if err := db.insertBenchmark(tx, versionID, &benchmark); err != nil {
+			return fmt.Errorf("failed to insert benchmark: %w", err)
+		}
+	}
+
+	// Update model updated_at timestamp
+	_, err = tx.Exec(`
+		UPDATE models
+		SET updated_at = ?
+		WHERE id = ?
+	`, time.Now(), modelID)
+	if err != nil {
+		return fmt.Errorf("failed to update model timestamp: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetModelVersion retrieves a specific version of a model
+func (db *DB) GetModelVersion(modelName, version string) (*ModelVersion, error) {
+	// First get model ID
+	var modelID int64
+	err := db.conn.QueryRow(`
+		SELECT id FROM models WHERE name = ?
+	`, modelName).Scan(&modelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("model not found: %s", modelName)
+		}
+		return nil, fmt.Errorf("failed to query model: %w", err)
+	}
+
+	// Get specific version
+	var v ModelVersion
+	err = db.conn.QueryRow(`
+		SELECT id, model_id, version, weights_uri, weights_size_gb, checksum_sha256,
+		       framework, python_version, dependencies, custom_image,
+		       entrypoint, handler,
+		       gpu_required, recommended_instance, min_cpu, min_memory_gb, min_gpu_memory_gb,
+		       created_at, is_latest
+		FROM model_versions
+		WHERE model_id = ? AND version = ?
+	`, modelID, version).Scan(
+		&v.ID, &v.ModelID, &v.Version, &v.WeightsURI, &v.WeightsSizeGB, &v.ChecksumSHA256,
+		&v.Framework, &v.PythonVersion, &v.Dependencies, &v.CustomImage,
+		&v.Entrypoint, &v.Handler,
+		&v.GPURequired, &v.RecommendedInstance, &v.MinCPU, &v.MinMemoryGB, &v.MinGPUMemoryGB,
+		&v.CreatedAt, &v.IsLatest,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("version not found: %s", version)
+		}
+		return nil, err
+	}
+
+	// Load benchmarks
+	benchmarks, err := db.getBenchmarks(v.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load benchmarks: %w", err)
+	}
+	v.Benchmarks = benchmarks
+
+	return &v, nil
+}
+
+// ListModelVersions retrieves all versions of a model
+func (db *DB) ListModelVersions(modelName string) ([]ModelVersion, error) {
+	// First get model ID
+	var modelID int64
+	err := db.conn.QueryRow(`
+		SELECT id FROM models WHERE name = ?
+	`, modelName).Scan(&modelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("model not found: %s", modelName)
+		}
+		return nil, fmt.Errorf("failed to query model: %w", err)
+	}
+
+	// Get all versions
+	rows, err := db.conn.Query(`
+		SELECT id, model_id, version, weights_uri, weights_size_gb, checksum_sha256,
+		       framework, python_version, dependencies, custom_image,
+		       entrypoint, handler,
+		       gpu_required, recommended_instance, min_cpu, min_memory_gb, min_gpu_memory_gb,
+		       created_at, is_latest
+		FROM model_versions
+		WHERE model_id = ?
+		ORDER BY created_at DESC
+	`, modelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query versions: %w", err)
+	}
+
+	var versions []ModelVersion
+	for rows.Next() {
+		var v ModelVersion
+		if err := rows.Scan(
+			&v.ID, &v.ModelID, &v.Version, &v.WeightsURI, &v.WeightsSizeGB, &v.ChecksumSHA256,
+			&v.Framework, &v.PythonVersion, &v.Dependencies, &v.CustomImage,
+			&v.Entrypoint, &v.Handler,
+			&v.GPURequired, &v.RecommendedInstance, &v.MinCPU, &v.MinMemoryGB, &v.MinGPUMemoryGB,
+			&v.CreatedAt, &v.IsLatest,
+		); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan error: %w, close error: %v", err, closeErr)
+			}
+			return nil, err
+		}
+
+		// Load benchmarks
+		benchmarks, err := db.getBenchmarks(v.ID)
+		if err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("benchmark load error: %w, close error: %v", err, closeErr)
+			}
+			return nil, fmt.Errorf("failed to load benchmarks: %w", err)
+		}
+		v.Benchmarks = benchmarks
+
+		versions = append(versions, v)
+	}
+
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	return versions, rows.Err()
+}

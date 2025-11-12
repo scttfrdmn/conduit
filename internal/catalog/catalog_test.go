@@ -485,6 +485,176 @@ func TestGetModel_WithCitation(t *testing.T) {
 	}
 }
 
+func TestCreateModelVersion(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create initial model
+	model := createTestModel("versioned-model")
+	model.Version = "1.0.0"
+
+	modelID, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Create a new version
+	model.Version = "2.0.0"
+	model.Runtime.PythonVersion = "3.12" // Change something
+
+	err = db.CreateModelVersion(modelID, model)
+	if err != nil {
+		t.Fatalf("CreateModelVersion() error = %v", err)
+	}
+
+	// Verify new version is latest
+	retrieved, err := db.GetModel("versioned-model")
+	if err != nil {
+		t.Fatalf("GetModel() error = %v", err)
+	}
+
+	if retrieved.LatestVersion.Version != "2.0.0" {
+		t.Errorf("Latest version = %v, want 2.0.0", retrieved.LatestVersion.Version)
+	}
+
+	if retrieved.LatestVersion.PythonVersion != "3.12" {
+		t.Errorf("PythonVersion = %v, want 3.12", retrieved.LatestVersion.PythonVersion)
+	}
+
+	// Try to create same version again - should fail
+	err = db.CreateModelVersion(modelID, model)
+	if err == nil {
+		t.Error("CreateModelVersion() should fail for duplicate version")
+	}
+}
+
+func TestListModelVersions(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with multiple versions
+	model := createTestModel("multi-version-model")
+	model.Version = "1.0.0"
+
+	modelID, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Add more versions
+	versions := []string{"1.1.0", "2.0.0", "2.1.0"}
+	for _, v := range versions {
+		model.Version = v
+		if err := db.CreateModelVersion(modelID, model); err != nil {
+			t.Fatalf("CreateModelVersion(%s) error = %v", v, err)
+		}
+	}
+
+	// List all versions
+	allVersions, err := db.ListModelVersions("multi-version-model")
+	if err != nil {
+		t.Fatalf("ListModelVersions() error = %v", err)
+	}
+
+	// Should have 4 versions total (1.0.0 + 3 added)
+	if len(allVersions) != 4 {
+		t.Errorf("ListModelVersions() returned %d versions, want 4", len(allVersions))
+	}
+
+	// Verify all expected versions are present
+	versionSet := make(map[string]bool)
+	for _, v := range allVersions {
+		versionSet[v.Version] = true
+	}
+
+	expectedVersions := []string{"1.0.0", "1.1.0", "2.0.0", "2.1.0"}
+	for _, expected := range expectedVersions {
+		if !versionSet[expected] {
+			t.Errorf("Expected version %s not found", expected)
+		}
+	}
+
+	// Only the latest should have IsLatest = true
+	latestCount := 0
+	var latestVersion string
+	for _, v := range allVersions {
+		if v.IsLatest {
+			latestCount++
+			latestVersion = v.Version
+		}
+	}
+
+	if latestCount != 1 {
+		t.Errorf("Found %d versions marked as latest, want 1", latestCount)
+	}
+
+	if latestVersion != "2.1.0" {
+		t.Errorf("Latest version is %v, want 2.1.0", latestVersion)
+	}
+}
+
+func TestGetModelVersion(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with versions
+	model := createTestModel("specific-version-model")
+	model.Version = "1.0.0"
+
+	modelID, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	model.Version = "2.0.0"
+	model.Runtime.Framework = "tensorflow"
+	if err := db.CreateModelVersion(modelID, model); err != nil {
+		t.Fatalf("CreateModelVersion() error = %v", err)
+	}
+
+	// Get specific old version
+	v1, err := db.GetModelVersion("specific-version-model", "1.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(1.0.0) error = %v", err)
+	}
+
+	if v1.Version != "1.0.0" {
+		t.Errorf("Version = %v, want 1.0.0", v1.Version)
+	}
+
+	if v1.Framework != "pytorch" {
+		t.Errorf("Framework = %v, want pytorch", v1.Framework)
+	}
+
+	if v1.IsLatest {
+		t.Error("Version 1.0.0 should not be latest")
+	}
+
+	// Get latest version
+	v2, err := db.GetModelVersion("specific-version-model", "2.0.0")
+	if err != nil {
+		t.Fatalf("GetModelVersion(2.0.0) error = %v", err)
+	}
+
+	if v2.Version != "2.0.0" {
+		t.Errorf("Version = %v, want 2.0.0", v2.Version)
+	}
+
+	if v2.Framework != "tensorflow" {
+		t.Errorf("Framework = %v, want tensorflow", v2.Framework)
+	}
+
+	if !v2.IsLatest {
+		t.Error("Version 2.0.0 should be latest")
+	}
+
+	// Try to get non-existent version
+	_, err = db.GetModelVersion("specific-version-model", "3.0.0")
+	if err == nil {
+		t.Error("GetModelVersion(3.0.0) should fail")
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }

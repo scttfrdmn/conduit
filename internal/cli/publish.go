@@ -94,16 +94,29 @@ func runPublish(cmd *cobra.Command, args []string) (err error) {
 	// Check if model already exists
 	existing, err := db.GetModel(m.Name)
 	if err == nil {
-		// Model exists, ask for confirmation
-		fmt.Printf("\n⚠️  Model '%s' already exists in catalog\n", m.Name)
-		fmt.Printf("   Current version: %s\n", existing.LatestVersion.Version)
-		fmt.Printf("   New version: %s\n\n", m.Version)
+		// Model exists - check if version is different
+		if existing.LatestVersion != nil && existing.LatestVersion.Version == m.Version {
+			return fmt.Errorf("version %s already exists for model %s", m.Version, m.Name)
+		}
 
-		// For now, return error. In future, add --force flag or version update logic
-		return fmt.Errorf("model already exists. Use a different version or remove the existing model first")
+		// Publishing new version
+		fmt.Printf("Found existing model '%s'\n", m.Name)
+		fmt.Printf("   Current version: %s\n", existing.LatestVersion.Version)
+		fmt.Printf("   New version: %s\n", m.Version)
+		fmt.Printf("Publishing new version...\n")
+
+		if err := db.CreateModelVersion(existing.ID, m); err != nil {
+			return fmt.Errorf("failed to create new version: %w", err)
+		}
+
+		fmt.Printf("✓ Published new version\n")
+		fmt.Printf("\n✅ Successfully published %s v%s!\n\n", m.Name, m.Version)
+		fmt.Printf("View it with: conduit info %s\n", m.Name)
+		return nil
 	}
 
-	// Register model in catalog
+	// Model doesn't exist - create it
+	fmt.Printf("Registering new model '%s'...\n", m.Name)
 	id, err := db.CreateModel(m)
 	if err != nil {
 		return fmt.Errorf("failed to register model: %w", err)
