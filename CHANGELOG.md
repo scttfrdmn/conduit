@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Show benchmark results and performance metrics
   - Display citation information with formatted author list
   - Comprehensive view of all model attributes
+- CLI `list` command to display all models in catalog
+  - Paginated display with limit and offset support
+  - Shows model name, domain, description, and update date
+  - Total count and navigation hints
+  - Clean, user-friendly format
 - CLI `versions` command to list model version history
   - Shows all versions in reverse chronological order
   - Indicates which version is marked as latest
