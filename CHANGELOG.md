@@ -35,7 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic schema initialization and migrations
 - CLI `publish` command to register models in catalog
   - Validates model.yaml before registration
-  - Checks for existing models
+  - Supports versioning - can publish multiple versions of same model
+  - Automatically marks new versions as latest
+  - Prevents duplicate version publishing
   - Stores model metadata and benchmarks
 - CLI `search` command to query catalog
   - Search by keyword across names, domains, descriptions
@@ -47,7 +49,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Show benchmark results and performance metrics
   - Display citation information with formatted author list
   - Comprehensive view of all model attributes
-- Comprehensive test suite for catalog operations (10 tests)
+- CLI `versions` command to list model version history
+  - Shows all versions in reverse chronological order
+  - Indicates which version is marked as latest
+  - Displays creation dates and key attributes
+- Model versioning support in catalog
+  - CreateModelVersion() method to add new versions
+  - GetModelVersion() to retrieve specific version
+  - ListModelVersions() to show version history
+  - Automatic latest version tracking
+  - Version uniqueness validation
+- Comprehensive test suite for catalog operations (13 tests)
 
 ### Changed
 - CI pipeline now tests only Go 1.23 (previously tested 1.22 and 1.23)
