@@ -3,6 +3,7 @@ package catalog
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/scttfrdmn/conduit/pkg/types"
@@ -1297,6 +1298,262 @@ func TestImportConflictMerge(t *testing.T) {
 
 	if !versionNumbers["2.0.0"] {
 		t.Error("Version 2.0.0 not found")
+	}
+}
+
+func TestEnhancedSearch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create test models with various attributes
+	model1 := createTestModel("alphafold2")
+	model1.License = "apache-2.0"
+	model1.GitHubRepo = "github.com/deepmind/alphafold"
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(alphafold2) error = %v", err)
+	}
+
+	model2 := createTestModel("bert-base")
+	model2.License = "mit"
+	model2.GitHubRepo = "github.com/google/bert"
+	_, err = db.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(bert-base) error = %v", err)
+	}
+
+	model3 := createTestModel("gpt-4")
+	model3.License = "proprietary"
+	model3.GitHubRepo = "github.com/openai/gpt-4"
+	_, err = db.CreateModel(model3)
+	if err != nil {
+		t.Fatalf("CreateModel(gpt-4) error = %v", err)
+	}
+
+	// Test license filter
+	results, err := db.Search(SearchOptions{
+		License: "apache",
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("Search(license=apache) error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("License search returned %d results, want 1", len(results))
+	}
+
+	if len(results) > 0 && results[0].Name != "alphafold2" {
+		t.Errorf("License search returned %q, want alphafold2", results[0].Name)
+	}
+
+	// Test author filter
+	results, err = db.Search(SearchOptions{
+		Author: "deepmind",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("Search(author=deepmind) error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("Author search returned %d results, want 1", len(results))
+	}
+
+	if len(results) > 0 && results[0].Name != "alphafold2" {
+		t.Errorf("Author search returned %q, want alphafold2", results[0].Name)
+	}
+
+	// Test date filter
+	futureDate := "2099-01-01"
+	results, err = db.Search(SearchOptions{
+		CreatedBefore: futureDate,
+		Limit:         10,
+	})
+	if err != nil {
+		t.Fatalf("Search(before=%s) error = %v", futureDate, err)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Date search returned %d results, want 3", len(results))
+	}
+
+	pastDate := "2000-01-01"
+	results, err = db.Search(SearchOptions{
+		CreatedAfter: pastDate,
+		Limit:        10,
+	})
+	if err != nil {
+		t.Fatalf("Search(after=%s) error = %v", pastDate, err)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Date search returned %d results, want 3", len(results))
+	}
+}
+
+func TestFuzzySearch(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create models with similar names
+	model1 := createTestModel("alphafold2")
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(alphafold2) error = %v", err)
+	}
+
+	model2 := createTestModel("alphafold3")
+	_, err = db.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(alphafold3) error = %v", err)
+	}
+
+	model3 := createTestModel("bert-base")
+	_, err = db.CreateModel(model3)
+	if err != nil {
+		t.Fatalf("CreateModel(bert-base) error = %v", err)
+	}
+
+	// Test fuzzy search with typo
+	results, err := db.Search(SearchOptions{
+		Query:      "alphafld",
+		FuzzyMatch: true,
+		MinScore:   0.7,
+		Limit:      10,
+	})
+	if err != nil {
+		t.Fatalf("Fuzzy search error = %v", err)
+	}
+
+	// Should find alphafold2 and alphafold3 despite typo
+	if len(results) < 2 {
+		t.Errorf("Fuzzy search returned %d results, want at least 2", len(results))
+	}
+
+	// Verify results are sorted by relevance score
+	for i := 0; i < len(results)-1; i++ {
+		if results[i].Score < results[i+1].Score {
+			t.Errorf("Results not sorted by score: %.2f < %.2f", results[i].Score, results[i+1].Score)
+		}
+	}
+
+	// Test fuzzy search with exact match
+	results, err = db.Search(SearchOptions{
+		Query:      "alphafold2",
+		FuzzyMatch: true,
+		MinScore:   0.95, // Higher threshold to get only exact/near-exact matches
+		Limit:      10,
+	})
+	if err != nil {
+		t.Fatalf("Fuzzy exact search error = %v", err)
+	}
+
+	// Should find alphafold2 (exact match) and possibly alphafold3 (high substring match)
+	if len(results) < 1 {
+		t.Errorf("Fuzzy exact search returned %d results, want at least 1", len(results))
+	}
+
+	// First result should be exact match with score 1.0
+	if len(results) > 0 {
+		if results[0].Name != "alphafold2" {
+			t.Errorf("First result = %q, want alphafold2 (exact match should rank highest)", results[0].Name)
+		}
+
+		if results[0].Score < 0.99 {
+			t.Errorf("Exact match score = %.2f, want >= 0.99", results[0].Score)
+		}
+	}
+
+	// Test min score threshold
+	results, err = db.Search(SearchOptions{
+		Query:      "xyz123",
+		FuzzyMatch: true,
+		MinScore:   0.9, // High threshold, should filter out all low scores
+		Limit:      10,
+	})
+	if err != nil {
+		t.Fatalf("Fuzzy min score search error = %v", err)
+	}
+
+	// Should return no results for very different query with high threshold
+	if len(results) > 0 {
+		t.Errorf("High threshold search returned %d results, want 0", len(results))
+	}
+}
+
+func TestCombinedFilters(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create models with various attributes
+	model1 := createTestModel("pytorch-model")
+	model1.License = "apache-2.0"
+	model1.GitHubRepo = "github.com/pytorch/model"
+	model1.Tags = []string{"production", "vision"}
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(pytorch-model) error = %v", err)
+	}
+
+	model2 := createTestModel("tensorflow-model")
+	model2.License = "apache-2.0"
+	model2.GitHubRepo = "github.com/tensorflow/model"
+	model2.Tags = []string{"production", "nlp"}
+	_, err = db.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(tensorflow-model) error = %v", err)
+	}
+
+	model3 := createTestModel("experimental-model")
+	model3.License = "mit"
+	model3.GitHubRepo = "github.com/pytorch/experimental"
+	model3.Tags = []string{"experimental", "vision"}
+	_, err = db.CreateModel(model3)
+	if err != nil {
+		t.Fatalf("CreateModel(experimental-model) error = %v", err)
+	}
+
+	// Test combined filters: license + author + tag
+	results, err := db.Search(SearchOptions{
+		License: "apache",
+		Author:  "pytorch",
+		Tags:    []string{"production"},
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("Combined search error = %v", err)
+	}
+
+	// Should only match pytorch-model (apache + pytorch + production)
+	if len(results) != 1 {
+		t.Errorf("Combined search returned %d results, want 1", len(results))
+	}
+
+	if len(results) > 0 && results[0].Name != "pytorch-model" {
+		t.Errorf("Combined search returned %q, want pytorch-model", results[0].Name)
+	}
+
+	// Test license + tag filter (should match at least 1 model)
+	results, err = db.Search(SearchOptions{
+		License: "apache",
+		Tags:    []string{"production"},
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("License+tag search error = %v", err)
+	}
+
+	// Should match pytorch-model and tensorflow-model (both have apache + production)
+	if len(results) < 1 {
+		t.Errorf("License+tag search returned %d results, want at least 1", len(results))
+	}
+
+	// Verify results have correct attributes
+	for _, r := range results {
+		if !strings.Contains(r.License, "apache") {
+			t.Errorf("Result %q has license %q, expected to contain 'apache'", r.Name, r.License)
+		}
 	}
 }
 

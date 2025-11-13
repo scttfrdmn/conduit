@@ -448,8 +448,9 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 	var args []interface{}
 
 	// Build WHERE clause
-	if opts.Query != "" {
+	if opts.Query != "" && !opts.FuzzyMatch {
 		// Use LIKE for text search across name, domain, and description
+		// Skip this for fuzzy matching - we'll filter by score after retrieval
 		conditions = append(conditions, "(m.name LIKE ? OR m.domain LIKE ? OR m.description LIKE ?)")
 		searchPattern := "%" + opts.Query + "%"
 		args = append(args, searchPattern, searchPattern, searchPattern)
@@ -496,6 +497,26 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 				args = append(args, tag)
 			}
 		}
+	}
+
+	if opts.License != "" {
+		conditions = append(conditions, "m.license LIKE ?")
+		args = append(args, "%"+opts.License+"%")
+	}
+
+	if opts.Author != "" {
+		conditions = append(conditions, "m.github_repo LIKE ?")
+		args = append(args, "%"+opts.Author+"%")
+	}
+
+	if opts.CreatedAfter != "" {
+		conditions = append(conditions, "m.created_at >= ?")
+		args = append(args, opts.CreatedAfter)
+	}
+
+	if opts.CreatedBefore != "" {
+		conditions = append(conditions, "m.created_at <= ?")
+		args = append(args, opts.CreatedBefore)
 	}
 
 	whereClause := ""
@@ -552,6 +573,30 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 			}
 			return nil, err
 		}
+
+		// Calculate relevance score if fuzzy matching is enabled
+		if opts.FuzzyMatch && opts.Query != "" {
+			// Calculate fuzzy score against name (highest weight)
+			nameScore := FuzzyMatch(opts.Query, r.Name) * 1.0
+
+			// Calculate fuzzy score against domain (medium weight)
+			domainScore := FuzzyMatch(opts.Query, r.Domain) * 0.5
+
+			// Calculate fuzzy score against description (low weight)
+			descScore := FuzzyMatch(opts.Query, r.Description) * 0.3
+
+			// Take the maximum score
+			r.Score = maxFloat64(nameScore, maxFloat64(domainScore, descScore))
+
+			// Filter by minimum score if specified
+			if opts.MinScore > 0 && r.Score < opts.MinScore {
+				continue
+			}
+		} else {
+			// Default score for non-fuzzy searches
+			r.Score = 1.0
+		}
+
 		results = append(results, r)
 	}
 
@@ -559,7 +604,23 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 		return nil, err
 	}
 
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Sort by relevance score if fuzzy matching is enabled
+	if opts.FuzzyMatch && opts.Query != "" {
+		// Sort results by score (highest first)
+		for i := 0; i < len(results)-1; i++ {
+			for j := i + 1; j < len(results); j++ {
+				if results[j].Score > results[i].Score {
+					results[i], results[j] = results[j], results[i]
+				}
+			}
+		}
+	}
+
+	return results, nil
 }
 
 // UpdateModel updates an existing model's metadata

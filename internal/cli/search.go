@@ -10,13 +10,19 @@ import (
 )
 
 var (
-	searchDbPath    string
-	searchDomain    string
-	searchFramework string
-	searchGPU       string
-	searchTags      []string
-	searchLimit     int
-	searchSortBy    string
+	searchDbPath      string
+	searchDomain      string
+	searchFramework   string
+	searchGPU         string
+	searchTags        []string
+	searchLicense     string
+	searchAuthor      string
+	searchAfter       string
+	searchBefore      string
+	searchLimit       int
+	searchSortBy      string
+	searchFuzzy       bool
+	searchMinScore    float64
 )
 
 var searchCmd = &cobra.Command{
@@ -25,7 +31,8 @@ var searchCmd = &cobra.Command{
 	Long: `Search for models in the Conduit catalog.
 
 Searches across model names, domains, and descriptions.
-Can filter by domain, framework, GPU requirements, and tags.
+Can filter by domain, framework, GPU requirements, tags, license, author, and date.
+Supports fuzzy matching for handling typos.
 
 Examples:
   conduit search protein
@@ -34,7 +41,10 @@ Examples:
   conduit search --framework pytorch --gpu required
   conduit search --tag production --tag verified
   conduit search alphafold --limit 5
-  conduit search --sort-by popular`,
+  conduit search --sort-by popular
+  conduit search --fuzzy "alphafld"  # Finds alphafold2
+  conduit search --license apache --author deepmind
+  conduit search --after 2024-01-01 --before 2024-12-31`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runSearch,
 }
@@ -46,8 +56,14 @@ func init() {
 	searchCmd.Flags().StringVar(&searchFramework, "framework", "", "Filter by framework (pytorch, tensorflow, jax, onnx)")
 	searchCmd.Flags().StringVar(&searchGPU, "gpu", "", "Filter by GPU requirement (required, optional, none)")
 	searchCmd.Flags().StringSliceVar(&searchTags, "tag", []string{}, "Filter by tag (can be specified multiple times)")
+	searchCmd.Flags().StringVar(&searchLicense, "license", "", "Filter by license")
+	searchCmd.Flags().StringVar(&searchAuthor, "author", "", "Filter by author/organization in GitHub repo")
+	searchCmd.Flags().StringVar(&searchAfter, "after", "", "Filter by created after date (YYYY-MM-DD)")
+	searchCmd.Flags().StringVar(&searchBefore, "before", "", "Filter by created before date (YYYY-MM-DD)")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "Maximum number of results")
 	searchCmd.Flags().StringVar(&searchSortBy, "sort-by", "updated", "Sort results by (popular, name, created, updated)")
+	searchCmd.Flags().BoolVar(&searchFuzzy, "fuzzy", false, "Enable fuzzy matching for typos")
+	searchCmd.Flags().Float64Var(&searchMinScore, "min-score", 0.6, "Minimum relevance score for fuzzy matching (0.0-1.0)")
 }
 
 func runSearch(cmd *cobra.Command, args []string) (err error) {
@@ -70,13 +86,19 @@ func runSearch(cmd *cobra.Command, args []string) (err error) {
 
 	// Build search options
 	opts := catalog.SearchOptions{
-		Query:     query,
-		Domain:    searchDomain,
-		Framework: searchFramework,
-		Tags:      searchTags,
-		Limit:     searchLimit,
-		Offset:    0,
-		SortBy:    searchSortBy,
+		Query:         query,
+		Domain:        searchDomain,
+		Framework:     searchFramework,
+		Tags:          searchTags,
+		License:       searchLicense,
+		Author:        searchAuthor,
+		CreatedAfter:  searchAfter,
+		CreatedBefore: searchBefore,
+		Limit:         searchLimit,
+		Offset:        0,
+		SortBy:        searchSortBy,
+		FuzzyMatch:    searchFuzzy,
+		MinScore:      searchMinScore,
 	}
 
 	// Handle GPU filter
