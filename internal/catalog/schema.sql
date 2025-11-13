@@ -102,3 +102,20 @@ CREATE TABLE IF NOT EXISTS citations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_citations_model ON citations(model_id);
+
+-- Model statistics - tracks usage and popularity
+CREATE TABLE IF NOT EXISTS model_stats (
+    model_id INTEGER PRIMARY KEY,
+    total_deployments INTEGER DEFAULT 0,
+    total_predictions INTEGER DEFAULT 0,
+    view_count INTEGER DEFAULT 0,
+    last_deployed_at TIMESTAMP,
+    last_viewed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_stats_deployments ON model_stats(total_deployments);
+CREATE INDEX IF NOT EXISTS idx_stats_predictions ON model_stats(total_predictions);

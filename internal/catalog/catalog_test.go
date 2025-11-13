@@ -870,6 +870,138 @@ func TestModelWithTags(t *testing.T) {
 	}
 }
 
+func TestModelStatistics(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create two models
+	model1 := createTestModel("model-1")
+	id1, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(model-1) error = %v", err)
+	}
+
+	model2 := createTestModel("model-2")
+	id2, err := db.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(model-2) error = %v", err)
+	}
+
+	// Verify stats are initialized
+	retrieved1, err := db.GetModel("model-1")
+	if err != nil {
+		t.Fatalf("GetModel(model-1) error = %v", err)
+	}
+
+	if retrieved1.Stats == nil {
+		t.Fatal("Stats should not be nil")
+	}
+
+	if retrieved1.Stats.TotalDeployments != 0 || retrieved1.Stats.TotalPredictions != 0 || retrieved1.Stats.ViewCount != 0 {
+		t.Errorf("Initial stats should be zero, got deployments=%d, predictions=%d, views=%d",
+			retrieved1.Stats.TotalDeployments, retrieved1.Stats.TotalPredictions, retrieved1.Stats.ViewCount)
+	}
+
+	// Test IncrementViewCount
+	if err := db.IncrementViewCount(id1); err != nil {
+		t.Fatalf("IncrementViewCount() error = %v", err)
+	}
+
+	retrieved1, err = db.GetModel("model-1")
+	if err != nil {
+		t.Fatalf("GetModel(model-1) after view error = %v", err)
+	}
+
+	if retrieved1.Stats.ViewCount != 1 {
+		t.Errorf("ViewCount = %d, want 1", retrieved1.Stats.ViewCount)
+	}
+
+	if retrieved1.Stats.LastViewedAt.IsZero() {
+		t.Error("LastViewedAt should be set after view")
+	}
+
+	// Test TrackDeployment
+	if err := db.TrackDeployment(id1); err != nil {
+		t.Fatalf("TrackDeployment() error = %v", err)
+	}
+
+	retrieved1, err = db.GetModel("model-1")
+	if err != nil {
+		t.Fatalf("GetModel(model-1) after deployment error = %v", err)
+	}
+
+	if retrieved1.Stats.TotalDeployments != 1 {
+		t.Errorf("TotalDeployments = %d, want 1", retrieved1.Stats.TotalDeployments)
+	}
+
+	if retrieved1.Stats.LastDeployedAt.IsZero() {
+		t.Error("LastDeployedAt should be set after deployment")
+	}
+
+	// Test TrackPrediction
+	if err := db.TrackPrediction(id1, 100); err != nil {
+		t.Fatalf("TrackPrediction() error = %v", err)
+	}
+
+	retrieved1, err = db.GetModel("model-1")
+	if err != nil {
+		t.Fatalf("GetModel(model-1) after prediction error = %v", err)
+	}
+
+	if retrieved1.Stats.TotalPredictions != 100 {
+		t.Errorf("TotalPredictions = %d, want 100", retrieved1.Stats.TotalPredictions)
+	}
+
+	// Add more predictions
+	if err := db.TrackPrediction(id1, 50); err != nil {
+		t.Fatalf("TrackPrediction(50) error = %v", err)
+	}
+
+	retrieved1, err = db.GetModel("model-1")
+	if err != nil {
+		t.Fatalf("GetModel(model-1) after second prediction error = %v", err)
+	}
+
+	if retrieved1.Stats.TotalPredictions != 150 {
+		t.Errorf("TotalPredictions = %d, want 150", retrieved1.Stats.TotalPredictions)
+	}
+
+	// Make model-2 more popular for sorting test
+	if err := db.TrackDeployment(id2); err != nil {
+		t.Fatalf("TrackDeployment(model-2) error = %v", err)
+	}
+	if err := db.TrackDeployment(id2); err != nil {
+		t.Fatalf("TrackDeployment(model-2) #2 error = %v", err)
+	}
+	if err := db.TrackPrediction(id2, 200); err != nil {
+		t.Fatalf("TrackPrediction(model-2) error = %v", err)
+	}
+
+	// Test sorting by popularity
+	results, err := db.Search(SearchOptions{
+		Limit:  10,
+		Offset: 0,
+		SortBy: "popular",
+	})
+	if err != nil {
+		t.Fatalf("Search(sort by popular) error = %v", err)
+	}
+
+	if len(results) < 2 {
+		t.Fatalf("Expected at least 2 results, got %d", len(results))
+	}
+
+	// model-2 should come first (2 deployments, 200 predictions)
+	// model-1 should come second (1 deployment, 150 predictions)
+	if results[0].Name != "model-2" {
+		t.Errorf("First result = %v, want model-2 (most popular)", results[0].Name)
+	}
+
+	if results[1].Name != "model-1" {
+		t.Errorf("Second result = %v, want model-1", results[1].Name)
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
