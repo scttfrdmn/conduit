@@ -51,6 +51,13 @@ func (db *DB) CreateModel(m *types.Model) (int64, error) {
 		}
 	}
 
+	// Insert tags if present
+	if len(m.Tags) > 0 {
+		if err := db.insertTags(tx, modelID, m.Tags); err != nil {
+			return 0, fmt.Errorf("failed to insert tags: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -109,6 +116,48 @@ func (db *DB) insertCitation(tx *sql.Tx, modelID int64, c *types.Citation) error
 	return err
 }
 
+// insertTags inserts tags and creates model_tags associations within a transaction
+func (db *DB) insertTags(tx *sql.Tx, modelID int64, tags []string) error {
+	for _, tag := range tags {
+		// Normalize tag (lowercase, trim spaces)
+		tag = strings.ToLower(strings.TrimSpace(tag))
+		if tag == "" {
+			continue
+		}
+
+		// Insert tag if it doesn't exist (ignore if it does)
+		result, err := tx.Exec(`
+			INSERT OR IGNORE INTO tags (name) VALUES (?)
+		`, tag)
+		if err != nil {
+			return fmt.Errorf("failed to insert tag %s: %w", tag, err)
+		}
+
+		// Get tag ID
+		var tagID int64
+		if result != nil {
+			tagID, err = result.LastInsertId()
+			if err != nil || tagID == 0 {
+				// Tag already existed, need to query for it
+				err = tx.QueryRow(`SELECT id FROM tags WHERE name = ?`, tag).Scan(&tagID)
+				if err != nil {
+					return fmt.Errorf("failed to get tag ID for %s: %w", tag, err)
+				}
+			}
+		}
+
+		// Create model_tags association
+		_, err = tx.Exec(`
+			INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)
+		`, modelID, tagID)
+		if err != nil {
+			return fmt.Errorf("failed to associate tag %s with model: %w", tag, err)
+		}
+	}
+
+	return nil
+}
+
 // GetModel retrieves a model by name
 func (db *DB) GetModel(name string) (*Model, error) {
 	var m Model
@@ -140,6 +189,13 @@ func (db *DB) GetModel(name string) (*Model, error) {
 		return nil, fmt.Errorf("failed to load citation: %w", err)
 	}
 	m.Citation = citation
+
+	// Load tags
+	tags, err := db.getTags(m.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tags: %w", err)
+	}
+	m.Tags = tags
 
 	return &m, nil
 }
@@ -229,6 +285,38 @@ func (db *DB) getCitation(modelID int64) (*Citation, error) {
 	return &c, nil
 }
 
+// getTags retrieves all tags for a model
+func (db *DB) getTags(modelID int64) ([]string, error) {
+	rows, err := db.conn.Query(`
+		SELECT t.name
+		FROM tags t
+		INNER JOIN model_tags mt ON t.id = mt.tag_id
+		WHERE mt.model_id = ?
+		ORDER BY t.name
+	`, modelID)
+	if err != nil {
+		return nil, err
+	}
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan error: %w, close error: %v", err, closeErr)
+			}
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	return tags, rows.Err()
+}
+
 // ListModels retrieves all models with pagination
 func (db *DB) ListModels(limit, offset int) ([]Model, error) {
 	rows, err := db.conn.Query(`
@@ -303,6 +391,24 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 			)
 		`)
 		args = append(args, *opts.GPURequired)
+	}
+
+	if len(opts.Tags) > 0 {
+		// Filter by tags - model must have all specified tags
+		for _, tag := range opts.Tags {
+			tag = strings.ToLower(strings.TrimSpace(tag))
+			if tag != "" {
+				conditions = append(conditions, `
+					m.id IN (
+						SELECT mt.model_id
+						FROM model_tags mt
+						INNER JOIN tags t ON mt.tag_id = t.id
+						WHERE t.name = ?
+					)
+				`)
+				args = append(args, tag)
+			}
+		}
 	}
 
 	whereClause := ""

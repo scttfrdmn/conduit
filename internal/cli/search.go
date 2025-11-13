@@ -14,6 +14,7 @@ var (
 	searchDomain    string
 	searchFramework string
 	searchGPU       string
+	searchTags      []string
 	searchLimit     int
 )
 
@@ -23,13 +24,14 @@ var searchCmd = &cobra.Command{
 	Long: `Search for models in the Conduit catalog.
 
 Searches across model names, domains, and descriptions.
-Can filter by domain, framework, and GPU requirements.
+Can filter by domain, framework, GPU requirements, and tags.
 
 Examples:
   conduit search protein
   conduit search "protein folding"
   conduit search --domain protein-science
-  conduit search --framework pytorch --gpu-required
+  conduit search --framework pytorch --gpu required
+  conduit search --tag production --tag verified
   conduit search alphafold --limit 5`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runSearch,
@@ -41,6 +43,7 @@ func init() {
 	searchCmd.Flags().StringVar(&searchDomain, "domain", "", "Filter by domain")
 	searchCmd.Flags().StringVar(&searchFramework, "framework", "", "Filter by framework (pytorch, tensorflow, jax, onnx)")
 	searchCmd.Flags().StringVar(&searchGPU, "gpu", "", "Filter by GPU requirement (required, optional, none)")
+	searchCmd.Flags().StringSliceVar(&searchTags, "tag", []string{}, "Filter by tag (can be specified multiple times)")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "Maximum number of results")
 }
 
@@ -67,6 +70,7 @@ func runSearch(cmd *cobra.Command, args []string) (err error) {
 		Query:     query,
 		Domain:    searchDomain,
 		Framework: searchFramework,
+		Tags:      searchTags,
 		Limit:     searchLimit,
 		Offset:    0,
 		SortBy:    "relevance",

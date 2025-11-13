@@ -5,10 +5,11 @@ import "time"
 // Model represents a scientific model specification
 type Model struct {
 	// Metadata
-	Name        string `yaml:"name" json:"name"`
-	Version     string `yaml:"version" json:"version"`
-	Domain      string `yaml:"domain" json:"domain"`
-	Description string `yaml:"description" json:"description"`
+	Name        string   `yaml:"name" json:"name"`
+	Version     string   `yaml:"version" json:"version"`
+	Domain      string   `yaml:"domain" json:"domain"`
+	Description string   `yaml:"description" json:"description"`
+	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 
 	// Publishing info
 	GitHubRepo   string    `yaml:"github_repo,omitempty" json:"github_repo,omitempty"`
