@@ -1,6 +1,10 @@
 package catalog
 
-import "time"
+import (
+	"time"
+
+	"github.com/scttfrdmn/conduit/pkg/types"
+)
 
 // Model represents a model in the catalog
 type Model struct {
@@ -14,9 +18,10 @@ type Model struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 
 	// Related data (not from DB directly)
-	LatestVersion *ModelVersion `db:"-"`
-	Citation      *Citation     `db:"-"`
-	Tags          []string      `db:"-"`
+	LatestVersion *ModelVersion   `db:"-"`
+	Citation      *Citation       `db:"-"`
+	Tags          []string        `db:"-"`
+	Stats         *types.ModelStats `db:"-"`
 }
 
 // ModelVersion represents a specific version of a model

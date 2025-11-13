@@ -16,6 +16,7 @@ var (
 	searchGPU       string
 	searchTags      []string
 	searchLimit     int
+	searchSortBy    string
 )
 
 var searchCmd = &cobra.Command{
@@ -32,7 +33,8 @@ Examples:
   conduit search --domain protein-science
   conduit search --framework pytorch --gpu required
   conduit search --tag production --tag verified
-  conduit search alphafold --limit 5`,
+  conduit search alphafold --limit 5
+  conduit search --sort-by popular`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runSearch,
 }
@@ -45,6 +47,7 @@ func init() {
 	searchCmd.Flags().StringVar(&searchGPU, "gpu", "", "Filter by GPU requirement (required, optional, none)")
 	searchCmd.Flags().StringSliceVar(&searchTags, "tag", []string{}, "Filter by tag (can be specified multiple times)")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "Maximum number of results")
+	searchCmd.Flags().StringVar(&searchSortBy, "sort-by", "updated", "Sort results by (popular, name, created, updated)")
 }
 
 func runSearch(cmd *cobra.Command, args []string) (err error) {
@@ -73,7 +76,7 @@ func runSearch(cmd *cobra.Command, args []string) (err error) {
 		Tags:      searchTags,
 		Limit:     searchLimit,
 		Offset:    0,
-		SortBy:    "relevance",
+		SortBy:    searchSortBy,
 	}
 
 	// Handle GPU filter

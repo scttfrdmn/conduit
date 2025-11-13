@@ -51,6 +51,12 @@ func runInfo(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("failed to get model: %w", err)
 	}
 
+	// Increment view count
+	if err := db.IncrementViewCount(model.ID); err != nil {
+		// Log error but don't fail - stats are not critical
+		fmt.Printf("Warning: failed to update view count: %v\n", err)
+	}
+
 	// Display model information
 	fmt.Printf("\n=== %s ===\n\n", model.Name)
 
@@ -70,6 +76,26 @@ func runInfo(cmd *cobra.Command, args []string) (err error) {
 	}
 	fmt.Printf("Created:     %s\n", model.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("Updated:     %s\n", model.UpdatedAt.Format("2006-01-02 15:04:05"))
+
+	// Usage statistics
+	if model.Stats != nil {
+		fmt.Printf("\n--- Usage Statistics ---\n\n")
+		if model.Stats.TotalDeployments > 0 {
+			fmt.Printf("Deployments:  %d\n", model.Stats.TotalDeployments)
+		}
+		if model.Stats.TotalPredictions > 0 {
+			fmt.Printf("Predictions:  %d\n", model.Stats.TotalPredictions)
+		}
+		if model.Stats.ViewCount > 0 {
+			fmt.Printf("Views:        %d\n", model.Stats.ViewCount)
+		}
+		if !model.Stats.LastDeployedAt.IsZero() {
+			fmt.Printf("Last Deployed: %s\n", model.Stats.LastDeployedAt.Format("2006-01-02 15:04:05"))
+		}
+		if !model.Stats.LastViewedAt.IsZero() {
+			fmt.Printf("Last Viewed:   %s\n", model.Stats.LastViewedAt.Format("2006-01-02 15:04:05"))
+		}
+	}
 
 	// Version info
 	if model.LatestVersion != nil {

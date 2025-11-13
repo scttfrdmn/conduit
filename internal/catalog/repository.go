@@ -58,6 +58,11 @@ func (db *DB) CreateModel(m *types.Model) (int64, error) {
 		}
 	}
 
+	// Initialize statistics
+	if err := db.initializeStats(tx, modelID); err != nil {
+		return 0, fmt.Errorf("failed to initialize stats: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -197,6 +202,13 @@ func (db *DB) GetModel(name string) (*Model, error) {
 	}
 	m.Tags = tags
 
+	// Load statistics
+	stats, err := db.getStats(m.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load stats: %w", err)
+	}
+	m.Stats = stats
+
 	return &m, nil
 }
 
@@ -317,6 +329,81 @@ func (db *DB) getTags(modelID int64) ([]string, error) {
 	return tags, rows.Err()
 }
 
+// initializeStats creates a stats record for a new model
+func (db *DB) initializeStats(tx *sql.Tx, modelID int64) error {
+	_, err := tx.Exec(`
+		INSERT INTO model_stats (model_id) VALUES (?)
+	`, modelID)
+	return err
+}
+
+// getStats retrieves usage statistics for a model
+func (db *DB) getStats(modelID int64) (*types.ModelStats, error) {
+	var stats types.ModelStats
+	var lastDeployedAt, lastViewedAt sql.NullTime
+
+	err := db.conn.QueryRow(`
+		SELECT total_deployments, total_predictions, view_count,
+		       last_deployed_at, last_viewed_at
+		FROM model_stats
+		WHERE model_id = ?
+	`, modelID).Scan(
+		&stats.TotalDeployments, &stats.TotalPredictions, &stats.ViewCount,
+		&lastDeployedAt, &lastViewedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No stats yet, return zero stats
+			return &types.ModelStats{}, nil
+		}
+		return nil, err
+	}
+
+	if lastDeployedAt.Valid {
+		stats.LastDeployedAt = lastDeployedAt.Time
+	}
+	if lastViewedAt.Valid {
+		stats.LastViewedAt = lastViewedAt.Time
+	}
+
+	return &stats, nil
+}
+
+// IncrementViewCount increments the view count for a model
+func (db *DB) IncrementViewCount(modelID int64) error {
+	_, err := db.conn.Exec(`
+		UPDATE model_stats
+		SET view_count = view_count + 1,
+		    last_viewed_at = CURRENT_TIMESTAMP,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE model_id = ?
+	`, modelID)
+	return err
+}
+
+// TrackDeployment records a model deployment
+func (db *DB) TrackDeployment(modelID int64) error {
+	_, err := db.conn.Exec(`
+		UPDATE model_stats
+		SET total_deployments = total_deployments + 1,
+		    last_deployed_at = CURRENT_TIMESTAMP,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE model_id = ?
+	`, modelID)
+	return err
+}
+
+// TrackPrediction records a prediction/inference
+func (db *DB) TrackPrediction(modelID int64, count int) error {
+	_, err := db.conn.Exec(`
+		UPDATE model_stats
+		SET total_predictions = total_predictions + ?,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE model_id = ?
+	`, count, modelID)
+	return err
+}
+
 // ListModels retrieves all models with pagination
 func (db *DB) ListModels(limit, offset int) ([]Model, error) {
 	rows, err := db.conn.Query(`
@@ -418,11 +505,16 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 
 	// Build ORDER BY clause
 	orderBy := "m.updated_at DESC"
+	needsStatsJoin := false
 	switch opts.SortBy {
 	case "name":
 		orderBy = "m.name ASC"
 	case "created_at":
 		orderBy = "m.created_at DESC"
+	case "popular", "popularity":
+		// Sort by popularity: deployments, predictions, then views
+		orderBy = "COALESCE(ms.total_deployments, 0) DESC, COALESCE(ms.total_predictions, 0) DESC, COALESCE(ms.view_count, 0) DESC"
+		needsStatsJoin = true
 	}
 
 	// Build query using strings.Builder to avoid gosec G201
@@ -430,6 +522,9 @@ func (db *DB) Search(opts SearchOptions) ([]SearchResult, error) {
 	query.WriteString("SELECT m.id, m.name, m.domain, m.description, ")
 	query.WriteString("m.github_repo, m.license, m.created_at, m.updated_at ")
 	query.WriteString("FROM models m ")
+	if needsStatsJoin {
+		query.WriteString("LEFT JOIN model_stats ms ON m.id = ms.model_id ")
+	}
 	if len(conditions) > 0 {
 		query.WriteString(whereClause)
 		query.WriteString(" ")

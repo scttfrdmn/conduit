@@ -39,6 +39,9 @@ type Model struct {
 
 	// Citations
 	Citation Citation `yaml:"citation,omitempty" json:"citation,omitempty"`
+
+	// Usage statistics (not included in YAML, only for display/API)
+	Stats *ModelStats `yaml:"-" json:"stats,omitempty"`
 }
 
 // Runtime defines the model runtime environment
@@ -103,4 +106,13 @@ type Citation struct {
 	Authors     []string `yaml:"authors,omitempty" json:"authors,omitempty"`
 	Year        int      `yaml:"year,omitempty" json:"year,omitempty"`
 	BibTeX      string   `yaml:"bibtex,omitempty" json:"bibtex,omitempty"`
+}
+
+// ModelStats tracks usage and popularity metrics
+type ModelStats struct {
+	TotalDeployments int       `json:"total_deployments"`
+	TotalPredictions int       `json:"total_predictions"`
+	ViewCount        int       `json:"view_count"`
+	LastDeployedAt   time.Time `json:"last_deployed_at,omitempty"`
+	LastViewedAt     time.Time `json:"last_viewed_at,omitempty"`
 }
