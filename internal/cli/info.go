@@ -59,6 +59,9 @@ func runInfo(cmd *cobra.Command, args []string) (err error) {
 	if model.Description != "" {
 		fmt.Printf("Description: %s\n", model.Description)
 	}
+	if len(model.Tags) > 0 {
+		fmt.Printf("Tags:        %s\n", strings.Join(model.Tags, ", "))
+	}
 	if model.GitHubRepo != "" {
 		fmt.Printf("GitHub:      %s\n", model.GitHubRepo)
 	}

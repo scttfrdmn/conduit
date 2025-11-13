@@ -771,6 +771,105 @@ func TestDeleteModelVersion_ReassignLatest(t *testing.T) {
 	}
 }
 
+func TestModelWithTags(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with tags
+	model := createTestModel("tagged-model")
+	model.Tags = []string{"production", "verified", "protein-folding"}
+
+	_, err := db.CreateModel(model)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Retrieve model
+	retrieved, err := db.GetModel("tagged-model")
+	if err != nil {
+		t.Fatalf("GetModel() error = %v", err)
+	}
+
+	// Verify tags are loaded and sorted
+	if len(retrieved.Tags) != 3 {
+		t.Fatalf("Expected 3 tags, got %d", len(retrieved.Tags))
+	}
+
+	expectedTags := []string{"production", "protein-folding", "verified"}
+	for i, expected := range expectedTags {
+		if retrieved.Tags[i] != expected {
+			t.Errorf("Tag[%d] = %v, want %v", i, retrieved.Tags[i], expected)
+		}
+	}
+
+	// Test search by single tag
+	results, err := db.Search(SearchOptions{
+		Tags:   []string{"production"},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	if results[0].Name != "tagged-model" {
+		t.Errorf("Search result name = %v, want tagged-model", results[0].Name)
+	}
+
+	// Test search by multiple tags (AND logic)
+	results, err = db.Search(SearchOptions{
+		Tags:   []string{"production", "verified"},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("Search(multiple tags) error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result for multiple tags, got %d", len(results))
+	}
+
+	// Test search by non-existent tag
+	results, err = db.Search(SearchOptions{
+		Tags:   []string{"nonexistent"},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("Search(nonexistent tag) error = %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for nonexistent tag, got %d", len(results))
+	}
+
+	// Create model without tags
+	untaggedModel := createTestModel("untagged-model")
+	_, err = db.CreateModel(untaggedModel)
+	if err != nil {
+		t.Fatalf("CreateModel(untagged) error = %v", err)
+	}
+
+	// Verify untagged model is not returned in tag search
+	results, err = db.Search(SearchOptions{
+		Tags:   []string{"production"},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("Search after adding untagged model error = %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("Expected only tagged model in results, got %d", len(results))
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
