@@ -92,12 +92,18 @@ type SearchResult struct {
 
 // SearchOptions configures search behavior
 type SearchOptions struct {
-	Query      string
-	Domain     string
-	Framework  string
-	GPURequired *bool
-	Tags       []string
-	Limit      int
-	Offset     int
-	SortBy     string // "relevance", "name", "created_at", "updated_at"
+	Query         string
+	Domain        string
+	Framework     string
+	GPURequired   *bool
+	Tags          []string
+	License       string
+	Author        string // Searches github_repo for organization/author
+	CreatedAfter  string // ISO date string (YYYY-MM-DD)
+	CreatedBefore string // ISO date string (YYYY-MM-DD)
+	Limit         int
+	Offset        int
+	SortBy        string  // "relevance", "name", "created_at", "updated_at", "popular"
+	FuzzyMatch    bool    // Enable fuzzy matching for query
+	MinScore      float64 // Minimum relevance score (0.0 to 1.0)
 }
