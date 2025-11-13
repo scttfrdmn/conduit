@@ -1002,6 +1002,304 @@ func TestModelStatistics(t *testing.T) {
 	}
 }
 
+func TestExportImport(t *testing.T) {
+	// Create source database
+	srcDB, srcCleanup := setupTestDB(t)
+	defer srcCleanup()
+
+	// Create test models with comprehensive data
+	model1 := createTestModel("export-model-1")
+	model1.Tags = []string{"production", "verified"}
+	_, err := srcDB.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(model-1) error = %v", err)
+	}
+
+	model2 := createTestModel("export-model-2")
+	model2.Tags = []string{"experimental"}
+	_, err = srcDB.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(model-2) error = %v", err)
+	}
+
+	// Export entire catalog
+	exportPath := t.TempDir() + "/catalog-export.json"
+	if err := srcDB.ExportCatalog(exportPath); err != nil {
+		t.Fatalf("ExportCatalog() error = %v", err)
+	}
+
+	// Verify export file exists
+	if _, err := os.Stat(exportPath); err != nil {
+		t.Fatalf("Export file not created: %v", err)
+	}
+
+	// Create destination database
+	dstDB, dstCleanup := setupTestDB(t)
+	defer dstCleanup()
+
+	// Import catalog
+	result, err := dstDB.ImportCatalog(exportPath, ConflictSkip)
+	if err != nil {
+		t.Fatalf("ImportCatalog() error = %v", err)
+	}
+
+	// Verify import results
+	if result.TotalModels != 2 {
+		t.Errorf("TotalModels = %d, want 2", result.TotalModels)
+	}
+
+	if result.ImportedModels != 2 {
+		t.Errorf("ImportedModels = %d, want 2", result.ImportedModels)
+	}
+
+	if len(result.Errors) > 0 {
+		t.Errorf("Import had errors: %v", result.Errors)
+	}
+
+	// Verify imported models
+	imported1, err := dstDB.GetModel("export-model-1")
+	if err != nil {
+		t.Fatalf("GetModel(export-model-1) error = %v", err)
+	}
+
+	if imported1.Name != "export-model-1" {
+		t.Errorf("Name = %v, want export-model-1", imported1.Name)
+	}
+
+	if imported1.Domain != model1.Domain {
+		t.Errorf("Domain = %v, want %v", imported1.Domain, model1.Domain)
+	}
+
+	if len(imported1.Tags) != 2 {
+		t.Errorf("Tags count = %d, want 2", len(imported1.Tags))
+	}
+
+	// Verify version data
+	if imported1.LatestVersion == nil {
+		t.Fatal("LatestVersion should not be nil")
+	}
+
+	if imported1.LatestVersion.Version != model1.Version {
+		t.Errorf("Version = %v, want %v", imported1.LatestVersion.Version, model1.Version)
+	}
+
+	// Count total models in destination
+	count, err := dstDB.CountModels()
+	if err != nil {
+		t.Fatalf("CountModels() error = %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("CountModels() = %d, want 2", count)
+	}
+}
+
+func TestExportSingleModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create multiple models
+	model1 := createTestModel("single-export-1")
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel(model-1) error = %v", err)
+	}
+
+	model2 := createTestModel("single-export-2")
+	_, err = db.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(model-2) error = %v", err)
+	}
+
+	// Export single model
+	exportPath := t.TempDir() + "/single-model-export.json"
+	if err := db.ExportModel("single-export-1", exportPath); err != nil {
+		t.Fatalf("ExportModel() error = %v", err)
+	}
+
+	// Read export file
+	export, err := readExportFile(exportPath)
+	if err != nil {
+		t.Fatalf("readExportFile() error = %v", err)
+	}
+
+	// Verify only one model exported
+	if len(export.Models) != 1 {
+		t.Errorf("Exported models count = %d, want 1", len(export.Models))
+	}
+
+	if export.Models[0].Name != "single-export-1" {
+		t.Errorf("Exported model name = %v, want single-export-1", export.Models[0].Name)
+	}
+}
+
+func TestImportConflictSkip(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create initial model
+	model1 := createTestModel("conflict-model")
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Export it
+	exportPath := t.TempDir() + "/conflict-export.json"
+	if err := db.ExportCatalog(exportPath); err != nil {
+		t.Fatalf("ExportCatalog() error = %v", err)
+	}
+
+	// Try to import again with skip strategy
+	result, err := db.ImportCatalog(exportPath, ConflictSkip)
+	if err != nil {
+		t.Fatalf("ImportCatalog() error = %v", err)
+	}
+
+	// Verify model was skipped
+	if result.SkippedModels != 1 {
+		t.Errorf("SkippedModels = %d, want 1", result.SkippedModels)
+	}
+
+	if result.ImportedModels != 0 {
+		t.Errorf("ImportedModels = %d, want 0", result.ImportedModels)
+	}
+
+	// Verify still only one model
+	count, err := db.CountModels()
+	if err != nil {
+		t.Fatalf("CountModels() error = %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("CountModels() = %d, want 1", count)
+	}
+}
+
+func TestImportConflictOverwrite(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create initial model
+	model1 := createTestModel("overwrite-model")
+	model1.Description = "Original description"
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Modify and export
+	model2 := createTestModel("overwrite-model")
+	model2.Description = "Updated description"
+
+	// Create temporary database for modified model
+	tmpDB, tmpCleanup := setupTestDB(t)
+	defer tmpCleanup()
+
+	_, err = tmpDB.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(modified) error = %v", err)
+	}
+
+	exportPath := t.TempDir() + "/overwrite-export.json"
+	if err := tmpDB.ExportCatalog(exportPath); err != nil {
+		t.Fatalf("ExportCatalog() error = %v", err)
+	}
+
+	// Import with overwrite strategy
+	result, err := db.ImportCatalog(exportPath, ConflictOverwrite)
+	if err != nil {
+		t.Fatalf("ImportCatalog() error = %v", err)
+	}
+
+	// Verify model was updated
+	if result.UpdatedModels != 1 {
+		t.Errorf("UpdatedModels = %d, want 1", result.UpdatedModels)
+	}
+
+	// Verify description was updated
+	retrieved, err := db.GetModel("overwrite-model")
+	if err != nil {
+		t.Fatalf("GetModel() error = %v", err)
+	}
+
+	if retrieved.Description != "Updated description" {
+		t.Errorf("Description = %v, want 'Updated description'", retrieved.Description)
+	}
+}
+
+func TestImportConflictMerge(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create model with version 1.0.0
+	model1 := createTestModel("merge-model")
+	model1.Version = "1.0.0"
+	_, err := db.CreateModel(model1)
+	if err != nil {
+		t.Fatalf("CreateModel() error = %v", err)
+	}
+
+	// Create export with version 2.0.0
+	tmpDB, tmpCleanup := setupTestDB(t)
+	defer tmpCleanup()
+
+	model2 := createTestModel("merge-model")
+	model2.Version = "1.0.0"
+	model2ID, err := tmpDB.CreateModel(model2)
+	if err != nil {
+		t.Fatalf("CreateModel(v1) error = %v", err)
+	}
+
+	// Add version 2.0.0
+	model2v2 := createTestModel("merge-model")
+	model2v2.Version = "2.0.0"
+	err = tmpDB.CreateModelVersion(model2ID, model2v2)
+	if err != nil {
+		t.Fatalf("CreateModelVersion(v2) error = %v", err)
+	}
+
+	exportPath := t.TempDir() + "/merge-export.json"
+	if err := tmpDB.ExportCatalog(exportPath); err != nil {
+		t.Fatalf("ExportCatalog() error = %v", err)
+	}
+
+	// Import with merge strategy
+	result, err := db.ImportCatalog(exportPath, ConflictMerge)
+	if err != nil {
+		t.Fatalf("ImportCatalog() error = %v", err)
+	}
+
+	// Verify merge occurred
+	if result.UpdatedModels != 1 {
+		t.Errorf("UpdatedModels = %d, want 1", result.UpdatedModels)
+	}
+
+	// Verify both versions exist
+	versions, err := db.ListModelVersions("merge-model")
+	if err != nil {
+		t.Fatalf("ListModelVersions() error = %v", err)
+	}
+
+	if len(versions) != 2 {
+		t.Errorf("Version count = %d, want 2", len(versions))
+	}
+
+	// Verify version numbers
+	versionNumbers := make(map[string]bool)
+	for _, v := range versions {
+		versionNumbers[v.Version] = true
+	}
+
+	if !versionNumbers["1.0.0"] {
+		t.Error("Version 1.0.0 not found")
+	}
+
+	if !versionNumbers["2.0.0"] {
+		t.Error("Version 2.0.0 not found")
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
