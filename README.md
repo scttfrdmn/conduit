@@ -5,263 +5,398 @@
 [![Release](https://img.shields.io/github/v/release/scttfrdmn/conduit)](https://github.com/scttfrdmn/conduit/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/scttfrdmn/conduit)](go.mod)
 
-**AWS-native platform for publishing, discovering, and deploying scientific ML models**
+**A comprehensive catalog and deployment platform for scientific ML models**
 
-Conduit makes deploying scientific models as simple as installing software packages. No more HPC queue waits, no Docker expertise required, full cost transparency.
+Conduit simplifies the management, distribution, and deployment of scientific machine learning models. Discover models, share them with your team, and deploy to AWS with a single command.
 
 ```bash
-# Install
-brew install scttfrdmn/tap/conduit
+# Search for models
+conduit search "protein folding" --fuzzy
 
-# Deploy AlphaFold2 to AWS Bedrock
-conduit deploy alphafold2-multimer
+# Deploy to AWS SageMaker
+conduit deploy model.yaml --platform sagemaker
 
-# Run inference
-conduit predict alphafold2-multimer --sequence "MKLLVGDDS..."
+# Share with your team
+conduit push alphafold2 --registry myteam
 ```
 
 ---
 
-## Features
+## ✨ Features
 
-### 🚀 Instant Deployment
-- Deploy to AWS Bedrock in seconds (no HPC queues)
-- Automatic instance selection and optimization
-- Support for spot instances (70% cost savings)
+### 📦 Model Catalog Management
+- **Local catalog** with SQLite storage
+- **Full-text search** with fuzzy matching for typos
+- **Tags and labels** for organization
+- **Usage statistics** and popularity tracking
+- **Model versioning** with complete history
 
-### 🔬 Scientific Rigor
-- DOI minting via Zenodo
-- Standardized benchmarks across hardware
-- Reproducible model packaging
-- Cryptographic signing with Sigstore
+### 🌐 Team Collaboration
+- **Remote registries** for sharing models (HTTP, S3, Git)
+- **Push/pull workflows** like Docker
+- **Conflict resolution** strategies (skip, overwrite, merge)
+- **Export/import** for backup and migration
 
-### 🤖 Agentic Workflows
-- Compose multiple models with foundation models (Claude)
-- MCP server integration for scientific databases
-- Natural language workflow descriptions
+### 🚀 AWS Deployment
+- **SageMaker endpoints** with full automation
+- **Automatic Dockerfile generation** from model specifications
+- **ECR integration** (build, push, deploy)
+- **Environment detection** (Studio Lab, Studio, Local)
+- **Status monitoring** with health checks
 
-### 📊 Cost Transparency
-- Real-time cost tracking per inference
-- Cost/performance benchmarking
-- Budget alerts and limits
+### ✅ CI/CD Integration
+- **Model validation** (basic and strict modes)
+- **GitHub Actions workflows** generation
+- **Automated testing** on PRs
+- **Publishing workflows** for releases
 
-### 🎓 Education-Friendly
-- Auto-generated SageMaker Studio Lab notebooks
-- Streamlit/Gradio UIs (no-code access)
-- One-click Colab demos
-
-### 🔐 Supply Chain Security
-- Sigstore signing (keyless, OIDC-based)
-- Rekor transparency log
-- Cryptographic verification
+### 🔍 Advanced Search
+- **Fuzzy matching** with Levenshtein distance
+- **Multiple filters** (tags, license, author, dates)
+- **Relevance scoring** with weighted matching
+- **Sort by popularity** based on usage stats
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Installation
 
-**Homebrew (macOS/Linux)**
-```bash
-brew install scttfrdmn/tap/conduit
-```
-
-**Script (macOS/Linux)**
-```bash
-curl -sSL https://get.conduit.dev | bash
-```
-
-**Go Install**
-```bash
-go install github.com/scttfrdmn/conduit/cmd/conduit@latest
-```
-
-**From Source**
+**From Source** (requires Go 1.23+):
 ```bash
 git clone https://github.com/scttfrdmn/conduit.git
 cd conduit
-make install
+go build -o conduit ./cmd/conduit
+sudo mv conduit /usr/local/bin/
 ```
 
-### Usage
-
-**Discover Models**
+**Verify Installation**:
 ```bash
-# Search for protein folding models
-conduit search "protein folding"
-
-# Show model details
-conduit show alphafold2-multimer
+conduit --version
 ```
 
-**Deploy a Model**
-```bash
-# Deploy to AWS Bedrock
-conduit deploy alphafold2-multimer \
-  --instance ml.g5.2xlarge \
-  --region us-east-1
+### Basic Usage
 
-# Deploy with spot instances (save 70%)
-conduit deploy alphafold2-multimer --use-spot
+**Initialize Catalog**:
+```bash
+# Catalog is created automatically in ~/.conduit/catalog.db
+conduit list
 ```
 
-**Run Inference**
+**Add a Model**:
 ```bash
-# Run a prediction
-conduit predict alphafold2-multimer \
-  --sequence "MKLLVGDDS..." \
-  --output prediction.pdb
+# Create a model specification
+conduit init my-model
 
-# Batch processing
-conduit batch alphafold2-multimer \
-  --input sequences.fasta \
-  --output results/
+# Edit model.yaml with your model details
+# Then add to catalog
+conduit add model.yaml
 ```
 
-**Publish Your Own Model**
+**Search and Discover**:
 ```bash
-# Initialize from template
-conduit init --template protein-folding
+# Search for models
+conduit search "protein"
 
-# Validate model spec
-conduit validate
+# Fuzzy search (handles typos)
+conduit search "alphafld" --fuzzy
 
-# Publish to catalog
-conduit publish --github yourorg/your-model --sign
+# Filter by tags
+conduit search --tags ml,biology
+
+# View model details
+conduit info alphafold2
+```
+
+**Team Collaboration**:
+```bash
+# Configure a registry
+conduit registry add myteam https://registry.example.com
+
+# Push a model
+conduit push alphafold2 --registry myteam
+
+# Pull a model
+conduit pull esm2-large --registry myteam
+```
+
+**AWS Deployment**:
+```bash
+# Deploy to SageMaker
+conduit deploy model.yaml --platform sagemaker
+
+# With custom configuration
+conduit deploy model.yaml \
+  --platform sagemaker \
+  --instance-type ml.g5.2xlarge \
+  --region us-west-2
 ```
 
 ---
 
-## Why Conduit?
+## 📚 Documentation
 
-### The Problem
+### Guides
+- [**Getting Started**](docs/getting-started.md) - Complete walkthrough
+- [**Model Specification**](docs/model-spec.md) - model.yaml reference
+- [**Command Reference**](docs/commands.md) - All CLI commands
+- [**Deployment Guide**](docs/deployment.md) - AWS deployment
+- [**Registry Guide**](docs/registry.md) - Team collaboration
+- [**CI/CD Guide**](docs/cicd.md) - Automation workflows
 
-**For Researchers:**
-- Wait days for HPC GPU allocations
-- Complex deployment (Docker, Kubernetes, SLURM)
-- No cost transparency
-- Hard to reproduce published models
-
-**For Institutions:**
-- Wasted compute from overallocations
-- Maintenance burden (software environments, dependencies)
-- Difficulty sharing models between labs
-- No security/provenance for model weights
-
-### The Solution
-
-**Conduit provides:**
-- ✅ Instant deployment (seconds, not days)
-- ✅ Simple CLI (no Docker knowledge required)
-- ✅ Cost transparency (pay only for what you use)
-- ✅ Reproducible packaging (GitHub + DOI)
-- ✅ Cryptographic signing (Sigstore)
-- ✅ Auto-generated UIs (Streamlit, Gradio, Jupyter)
+### Examples
+- [**Model Examples**](examples/) - Sample model.yaml files
+- [**Inference Code**](examples/inference/) - Example handlers
+- [**Workflows**](examples/workflows/) - GitHub Actions examples
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ### Components
 
-1. **CLI Tool** (`conduit`) - Publish, deploy, and manage models
-2. **Model Registry** - GitHub-based, decentralized catalog
-3. **Deployment Engine** - AWS Bedrock and SageMaker integration
-4. **Catalog API** - Search and discover models
-5. **Web UI** - Browse models, view benchmarks
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Conduit CLI                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │   Catalog    │  │   Registry   │  │  Deployment  │     │
+│  │  (SQLite)    │  │   (HTTP/S3)  │  │  (AWS)       │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  Validation  │  │    Search    │  │    Export    │     │
+│  │  (Strict)    │  │   (Fuzzy)    │  │   (JSON)     │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Model Specification
+### Data Flow
+
+**Adding a Model**:
+```
+model.yaml → Parser → Validator → Catalog (SQLite)
+```
+
+**Deploying a Model**:
+```
+model.yaml → Dockerfile Generator → Docker Build → ECR Push →
+SageMaker Model → Endpoint Config → Endpoint Creation
+```
+
+**Sharing a Model**:
+```
+Local Catalog → Export (JSON) → Push to Registry → Team Access
+```
+
+---
+
+## 📖 Command Reference
+
+### Catalog Management
+```bash
+conduit add <model.yaml>              # Add model to catalog
+conduit list                          # List all models
+conduit info <model-name>             # Show model details
+conduit delete <model-name>           # Remove model
+conduit search <query>                # Search models
+```
+
+### Model Operations
+```bash
+conduit init [path]                   # Initialize new model project
+conduit validate <model.yaml>         # Validate model specification
+conduit publish <model.yaml>          # Publish model (placeholder)
+```
+
+### Version Management
+```bash
+conduit version create <model> <ver>  # Create new version
+conduit version list <model>          # List versions
+conduit version set-latest <m> <ver>  # Set latest version
+```
+
+### Export/Import
+```bash
+conduit export <model> -o file.json   # Export model
+conduit import <file.json>            # Import model
+```
+
+### Registry Operations
+```bash
+conduit registry add <name> <url>     # Add registry
+conduit registry list                 # List registries
+conduit registry remove <name>        # Remove registry
+conduit registry set-default <name>   # Set default
+
+conduit push <model>                  # Push to registry
+conduit pull <model>                  # Pull from registry
+```
+
+### AWS Deployment
+```bash
+conduit deploy <model.yaml>           # Deploy to AWS
+conduit workflow <type>               # Generate CI/CD workflows
+```
+
+### CI/CD
+```bash
+conduit validate --strict             # Strict validation
+conduit workflow validate             # Generate validate workflow
+conduit workflow publish              # Generate publish workflow
+conduit workflow deploy               # Generate deploy workflow
+conduit workflow all                  # Generate all workflows
+```
+
+---
+
+## 🔧 Model Specification
 
 Models are defined in `model.yaml`:
 
 ```yaml
-name: "alphafold2-multimer"
-version: "2.3.2"
+name: "my-model"
+version: "1.0.0"
 domain: "protein-science"
+description: "A brief description of your model"
 
-description: |
-  Predict protein structures and interactions using AlphaFold2
-
+# Runtime configuration
 runtime:
-  framework: "jax"
+  framework: "pytorch"            # pytorch, tensorflow, jax, onnx
   python_version: "3.11"
   dependencies: "requirements.txt"
 
+# Inference configuration
 inference:
-  entrypoint: "inference.py"
+  entrypoint: "predict.py"
   handler: "predict"
 
-weights_uri: "s3://aws-open-data-scientific-models/alphafold2/v2.3.2/"
+# Model artifacts
+weights_uri: "s3://bucket/weights"
+weights_size_gb: 5.2
+checksum_sha256: "abc123..."
 
+# Hardware requirements
 hardware:
   gpu_required: true
   recommended_instance: "ml.g5.2xlarge"
-  memory_gb: 24
+  min_memory_gb: 16
+  min_gpu_memory_gb: 24
 
+# Optional: benchmarks
 benchmarks:
-  - dataset: "CASP15"
-    metric: "GDT-TS"
-    result: 92.4
-    cost_per_prediction: "$0.15"
+  - dataset: "TestSet"
+    metric: "accuracy"
+    result: 0.95
+
+# Optional: tags
+tags:
+  - ml
+  - protein-folding
+
+# Optional: metadata
+license: "Apache-2.0"
+github_repo: "github.com/org/repo"
+```
+
+See [Model Specification Guide](docs/model-spec.md) for complete reference.
+
+---
+
+## 🌟 Key Features in Detail
+
+### Fuzzy Search
+Handle typos and variations in search queries:
+```bash
+# These all find "alphafold2"
+conduit search "alphafld" --fuzzy
+conduit search "alpha fold" --fuzzy
+conduit search "alfafold" --fuzzy --min-score 0.7
+```
+
+### Usage Statistics
+Track model popularity and usage:
+```bash
+conduit info alphafold2
+# Shows:
+# - Total deployments
+# - Total predictions
+# - View count
+# - Last deployed/viewed dates
+
+# Search by popularity
+conduit search --sort-by popular
+```
+
+### Model Versioning
+Complete version management:
+```bash
+# Create versions
+conduit version create alphafold2 2.3.2
+conduit version create alphafold2 2.3.3
+
+# List versions
+conduit version list alphafold2
+
+# Set latest
+conduit version set-latest alphafold2 2.3.3
+```
+
+### Remote Registries
+Share models with your team:
+```bash
+# HTTP registry
+conduit registry add myteam https://registry.example.com --type http
+
+# S3 registry (planned)
+conduit registry add backup s3://bucket/models --type s3
+
+# Git registry (planned)
+conduit registry add public github.com/org/models --type git
+
+# Push and pull
+conduit push alphafold2@2.3.2
+conduit pull esm2-large --strategy overwrite
+```
+
+### AWS Deployment
+Full SageMaker integration:
+```bash
+# Deploys in 4 steps:
+# 1. Generate Dockerfile
+# 2. Build and push to ECR
+# 3. Create SageMaker model
+# 4. Deploy endpoint
+
+conduit deploy model.yaml --platform sagemaker
+
+# Monitors progress and waits for InService
+```
+
+### CI/CD Automation
+Generate GitHub Actions workflows:
+```bash
+conduit workflow all
+
+# Creates:
+# .github/workflows/conduit-validate.yml
+# .github/workflows/conduit-publish.yml
+# .github/workflows/conduit-deploy.yml
 ```
 
 ---
 
-## Supported Domains
+## 🛠️ Development
 
-### 🧬 Protein Science (20+ models)
-AlphaFold2, ESMFold, ProteinMPNN, RFdiffusion, DiffDock, IgFold, and more
+### Prerequisites
+- Go 1.23+
+- Docker (for deployment features)
+- AWS CLI (for deployment features)
 
-### 🔬 Materials Science (Coming Soon)
-MACE, M3GNet, CDVAE, Nequip
-
-### 💊 Drug Discovery (Coming Soon)
-DiffDock, ADMET-AI, DeepChem models
-
-### 🌍 Climate Science (Planned)
-Weather forecasting, climate projection models
-
----
-
-## Documentation
-
-- [Getting Started Guide](docs/getting-started.md)
-- [Publishing Models](docs/publishing.md)
-- [Model Specification](docs/model-spec.md)
-- [Deployment Guide](docs/deployment.md)
-- [Agentic Workflows](docs/agentic-workflows.md)
-- [API Reference](docs/api.md)
-- [Contributing](CONTRIBUTING.md)
-
----
-
-## Project Status
-
-**Current Phase:** MVP Development (v0.1.0)
-
-**Roadmap:**
-- ✅ Project initialization and scaffolding
-- 🚧 Core CLI commands (init, validate, publish, deploy)
-- 🚧 Model parser and validator
-- 🚧 Bedrock deployment engine
-- 🚧 PostgreSQL catalog backend
-- 📋 Protein science model suite (20+ models)
-- 📋 Sigstore signing integration
-- 📋 SageMaker Studio Lab notebooks
-- 📋 Agentic workflow engine
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
-
----
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Setup
-
+### Setup
 ```bash
-# Clone repository
 git clone https://github.com/scttfrdmn/conduit.git
 cd conduit
 
@@ -269,54 +404,132 @@ cd conduit
 go mod download
 
 # Run tests
-make test
+go test ./...
+
+# Run linting
+golangci-lint run
 
 # Build
-make build
-
-# Run locally
-./bin/conduit --help
+go build -o conduit ./cmd/conduit
 ```
 
-### Code Quality
+### Project Structure
+```
+conduit/
+├── cmd/conduit/          # Main entry point
+├── internal/
+│   ├── catalog/          # SQLite catalog
+│   ├── cli/              # CLI commands
+│   ├── deployment/       # AWS deployment
+│   ├── registry/         # Remote registries
+│   ├── validation/       # Model validation
+│   ├── aws/              # AWS helpers
+│   └── cicd/             # CI/CD workflows
+├── pkg/types/            # Shared types
+├── docs/                 # Documentation
+└── examples/             # Example models
+```
 
-This project maintains:
-- ✅ Go Report Card: A+
-- ✅ Test coverage: >80%
-- ✅ Linting: golangci-lint
-- ✅ Formatting: gofmt, goimports
+### Running Tests
+```bash
+# All tests
+go test ./...
+
+# With coverage
+go test -cover ./...
+
+# Specific package
+go test ./internal/catalog/...
+
+# Verbose
+go test -v ./...
+```
 
 ---
 
-## Community
+## 🤝 Contributing
 
-- **GitHub Discussions**: [Ask questions, share ideas](https://github.com/scttfrdmn/conduit/discussions)
-- **GitHub Issues**: [Report bugs, request features](https://github.com/scttfrdmn/conduit/issues)
-- **Twitter**: [@conduit_dev](https://twitter.com/conduit_dev) (coming soon)
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Areas for Contribution
+- 🐛 Bug fixes
+- 📝 Documentation improvements
+- ✨ New features
+- 🧪 Test coverage
+- 📦 Example models
+- 🌍 Internationalization
+
+### Development Workflow
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/amazing-feature`)
+3. Make your changes
+4. Run tests and linting
+5. Commit your changes (follow conventional commits)
+6. Push to your fork
+7. Open a Pull Request
 
 ---
 
-## License
+## 📊 Project Status
+
+**Current Version**: v0.2.0 (Beta)
+
+### Completed Features ✅
+- ✅ Local catalog with SQLite
+- ✅ Model versioning
+- ✅ Tags and labels
+- ✅ Usage statistics
+- ✅ Export/import
+- ✅ Fuzzy search
+- ✅ Remote registries (HTTP)
+- ✅ AWS SageMaker deployment
+- ✅ CI/CD workflow generation
+- ✅ Model validation (basic & strict)
+
+### In Progress 🚧
+- 🚧 S3 and Git registry backends
+- 🚧 Endpoint management commands
+- 🚧 Cost estimation for deployments
+
+### Planned 📋
+- 📋 Web UI for catalog browsing
+- 📋 Bedrock custom model deployment
+- 📋 Batch inference support
+- 📋 Model performance monitoring
+- 📋 Multi-model endpoints
+- 📋 Auto-scaling configuration
+
+---
+
+## 📝 License
 
 Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-Built with ❤️ for the scientific computing community.
-
-Special thanks to:
-- AWS Bedrock team
-- Sigstore project
-- Scientific model publishers
-- Open source contributors
+Built for the scientific computing community with:
+- Go 1.23+
+- AWS SDK for Go v2
+- Cobra CLI framework
+- SQLite
+- Docker
 
 ---
 
-## Related Projects
+## 📧 Contact & Support
 
-- [Garden AI](https://github.com/Garden-AI) - ML model publishing (NSF-funded)
-- [Hugging Face](https://huggingface.co) - LLM model hub
-- [BioContainers](https://biocontainers.pro) - Bioinformatics containers
-- [Sigstore](https://sigstore.dev) - Software supply chain security
+- **GitHub Issues**: [Report bugs, request features](https://github.com/scttfrdmn/conduit/issues)
+- **GitHub Discussions**: [Ask questions, share ideas](https://github.com/scttfrdmn/conduit/discussions)
+- **Email**: support@conduit.dev (coming soon)
+
+---
+
+## 🔗 Links
+
+- [Documentation](docs/)
+- [Examples](examples/)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [License](LICENSE)
