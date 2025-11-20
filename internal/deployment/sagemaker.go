@@ -3,9 +3,13 @@ package deployment
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
+	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 )
 
 // SageMakerDeployer handles deployment to SageMaker Endpoints
@@ -54,96 +58,251 @@ func (d *SageMakerDeployer) Deploy(ctx context.Context) (*DeploymentResult, erro
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// TODO: Implement actual SageMaker deployment
-	// For now, return a placeholder result
-	fmt.Println("⚠️  SageMaker deployment is not yet fully implemented")
-	fmt.Println("This is a preview of the deployment functionality.")
-	fmt.Println()
-	fmt.Println("Full implementation will include:")
-	fmt.Println("  1. Building Docker container from model specification")
-	fmt.Println("  2. Pushing container to ECR")
-	fmt.Println("  3. Creating SageMaker model")
-	fmt.Println("  4. Creating endpoint configuration")
-	fmt.Println("  5. Deploying endpoint")
-	fmt.Println("  6. Running health checks")
-	fmt.Println()
+	// Check if Docker is installed
+	if err := CheckDockerInstalled(ctx); err != nil {
+		return nil, err
+	}
 
-	// Return placeholder result
+	// Step 1: Build and push Docker image
+	fmt.Println("Step 1/4: Building and pushing Docker image...")
+	imageURI, err := d.buildAndPushDockerImage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build/push image: %w", err)
+	}
+	fmt.Printf("✓ Image URI: %s\n\n", imageURI)
+
+	// Step 2: Create SageMaker model
+	fmt.Println("Step 2/4: Creating SageMaker model...")
+	modelName, err := d.createModel(ctx, imageURI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create model: %w", err)
+	}
+	fmt.Printf("✓ Model created: %s\n\n", modelName)
+
+	// Step 3: Create endpoint configuration
+	fmt.Println("Step 3/4: Creating endpoint configuration...")
+	endpointConfigName, err := d.createEndpointConfig(ctx, modelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create endpoint config: %w", err)
+	}
+	fmt.Printf("✓ Endpoint config created: %s\n\n", endpointConfigName)
+
+	// Step 4: Create and wait for endpoint
+	fmt.Println("Step 4/4: Creating endpoint...")
+	endpointARN, err := d.createEndpoint(ctx, endpointConfigName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create endpoint: %w", err)
+	}
+	fmt.Printf("✓ Endpoint created: %s\n\n", d.config.EndpointName)
+
+	// Return result
 	return &DeploymentResult{
 		EndpointName: d.config.EndpointName,
-		EndpointARN:  fmt.Sprintf("arn:aws:sagemaker:%s:123456789012:endpoint/%s", d.config.Region, d.config.EndpointName),
-		Status:       "PENDING_IMPLEMENTATION",
+		EndpointARN:  endpointARN,
+		Status:       "InService",
 		URL:          fmt.Sprintf("https://runtime.sagemaker.%s.amazonaws.com/endpoints/%s/invocations", d.config.Region, d.config.EndpointName),
 		Region:       d.config.Region,
 		Platform:     PlatformSageMaker,
 	}, nil
 }
 
-// buildDockerImage builds a Docker image from the model specification
-//
-//nolint:unused // Placeholder for future implementation
-func (d *SageMakerDeployer) buildDockerImage(ctx context.Context) (string, error) {
-	// TODO: Implement Docker image building
-	// This should:
-	// 1. Create a Dockerfile from model.yaml
-	// 2. Include the inference code
-	// 3. Install dependencies
-	// 4. Configure the entry point
-	// 5. Build the image
+// buildAndPushDockerImage builds a Docker image and pushes it to ECR
+func (d *SageMakerDeployer) buildAndPushDockerImage(ctx context.Context) (string, error) {
+	// Create temporary directory for build context
+	buildDir, err := os.MkdirTemp("", "conduit-build-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create build directory: %w", err)
+	}
+	defer os.RemoveAll(buildDir) //nolint:errcheck // Best effort cleanup
 
-	return "", fmt.Errorf("not implemented")
+	// Generate Dockerfile
+	generator := NewDockerfileGenerator(d.config.Model)
+	if err := generator.WriteDockerfile(buildDir); err != nil {
+		return "", fmt.Errorf("failed to generate Dockerfile: %w", err)
+	}
+
+	// Generate .dockerignore
+	if err := GenerateDockerignore(buildDir); err != nil {
+		return "", fmt.Errorf("failed to generate .dockerignore: %w", err)
+	}
+
+	// Copy inference code and dependencies to build context
+	if err := d.copyInferenceFiles(buildDir); err != nil {
+		return "", fmt.Errorf("failed to copy inference files: %w", err)
+	}
+
+	// Build and push to ECR
+	ecrManager := NewECRManager(d.awsConfig, d.config.Region)
+	repositoryName := fmt.Sprintf("conduit/%s", d.config.Model.Name)
+	tag := d.config.Model.Version
+
+	imageURI, err := ecrManager.BuildAndPushImage(ctx, buildDir, repositoryName, tag)
+	if err != nil {
+		return "", err
+	}
+
+	return imageURI, nil
 }
 
-// pushToECR pushes the Docker image to ECR
-//
-//nolint:unused // Placeholder for future implementation
-func (d *SageMakerDeployer) pushToECR(ctx context.Context, imageTag string) (string, error) {
-	// TODO: Implement ECR push
-	// This should:
-	// 1. Create ECR repository if it doesn't exist
-	// 2. Get ECR login credentials
-	// 3. Tag the image
-	// 4. Push to ECR
-	// 5. Return the ECR image URI
+// copyInferenceFiles copies inference code and dependencies to build context
+func (d *SageMakerDeployer) copyInferenceFiles(buildDir string) error {
+	// Copy dependencies file if specified
+	if d.config.Model.Runtime.Dependencies != "" {
+		srcPath := d.config.Model.Runtime.Dependencies
+		dstPath := filepath.Join(buildDir, filepath.Base(srcPath))
+		if err := copyFile(srcPath, dstPath); err != nil {
+			return fmt.Errorf("failed to copy dependencies: %w", err)
+		}
+	}
 
-	return "", fmt.Errorf("not implemented")
+	// Copy inference code
+	entrypointDir := filepath.Dir(d.config.Model.Inference.Entrypoint)
+	if entrypointDir == "." || entrypointDir == "" {
+		entrypointDir = "."
+	}
+
+	// For simplicity, copy all Python files from the entrypoint directory
+	return filepath.Walk(entrypointDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		// Only copy Python files and the entrypoint
+		if filepath.Ext(path) == ".py" || path == d.config.Model.Inference.Entrypoint {
+			relPath, err := filepath.Rel(entrypointDir, path)
+			if err != nil {
+				return err
+			}
+
+			dstPath := filepath.Join(buildDir, relPath)
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil { //nolint:gosec // Standard directory permissions
+				return err
+			}
+
+			return copyFile(path, dstPath)
+		}
+
+		return nil
+	})
 }
 
 // createModel creates a SageMaker model
-//
-//nolint:unused // Placeholder for future implementation
 func (d *SageMakerDeployer) createModel(ctx context.Context, imageURI string) (string, error) {
-	// TODO: Implement SageMaker model creation
-	// This should:
-	// 1. Create a SageMaker model with the ECR image
-	// 2. Configure environment variables
-	// 3. Return the model ARN
+	modelName := fmt.Sprintf("%s-%s", d.config.Model.Name, d.config.Model.Version)
 
-	return "", fmt.Errorf("not implemented")
+	input := &sagemaker.CreateModelInput{
+		ModelName: aws.String(modelName),
+		PrimaryContainer: &types.ContainerDefinition{
+			Image: aws.String(imageURI),
+			Environment: map[string]string{
+				"MODEL_NAME":    d.config.Model.Name,
+				"MODEL_VERSION": d.config.Model.Version,
+				"WEIGHTS_URI":   d.config.Model.WeightsURI,
+			},
+		},
+		ExecutionRoleArn: aws.String(d.config.Role),
+	}
+
+	_, err := d.client.CreateModel(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to create SageMaker model: %w", err)
+	}
+
+	return modelName, nil
 }
 
 // createEndpointConfig creates a SageMaker endpoint configuration
-//
-//nolint:unused // Placeholder for future implementation
 func (d *SageMakerDeployer) createEndpointConfig(ctx context.Context, modelName string) (string, error) {
-	// TODO: Implement endpoint configuration creation
-	// This should:
-	// 1. Create endpoint configuration
-	// 2. Configure instance type and count
-	// 3. Return the configuration ARN
+	configName := fmt.Sprintf("%s-config", d.config.EndpointName)
 
-	return "", fmt.Errorf("not implemented")
+	input := &sagemaker.CreateEndpointConfigInput{
+		EndpointConfigName: aws.String(configName),
+		ProductionVariants: []types.ProductionVariant{
+			{
+				VariantName:          aws.String("AllTraffic"),
+				ModelName:            aws.String(modelName),
+				InitialInstanceCount: aws.Int32(1),
+				InstanceType:         types.ProductionVariantInstanceType(d.config.InstanceType),
+				InitialVariantWeight: aws.Float32(1.0),
+			},
+		},
+	}
+
+	_, err := d.client.CreateEndpointConfig(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to create endpoint config: %w", err)
+	}
+
+	return configName, nil
 }
 
 // createEndpoint creates a SageMaker endpoint
-//
-//nolint:unused // Placeholder for future implementation
-func (d *SageMakerDeployer) createEndpoint(ctx context.Context, endpointConfigName string) error {
-	// TODO: Implement endpoint creation
-	// This should:
-	// 1. Create the endpoint
-	// 2. Wait for endpoint to be ready
-	// 3. Run health checks
+func (d *SageMakerDeployer) createEndpoint(ctx context.Context, endpointConfigName string) (string, error) {
+	input := &sagemaker.CreateEndpointInput{
+		EndpointName:       aws.String(d.config.EndpointName),
+		EndpointConfigName: aws.String(endpointConfigName),
+	}
 
-	return fmt.Errorf("not implemented")
+	output, err := d.client.CreateEndpoint(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to create endpoint: %w", err)
+	}
+
+	// Wait for endpoint to be in service
+	fmt.Println("Waiting for endpoint to be in service (this may take several minutes)...")
+	if err := d.waitForEndpoint(ctx); err != nil {
+		return "", err
+	}
+
+	return *output.EndpointArn, nil
+}
+
+// waitForEndpoint waits for the endpoint to reach InService status
+func (d *SageMakerDeployer) waitForEndpoint(ctx context.Context) error {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(20 * time.Minute)
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for endpoint to be in service")
+
+		case <-ticker.C:
+			output, err := d.client.DescribeEndpoint(ctx, &sagemaker.DescribeEndpointInput{
+				EndpointName: aws.String(d.config.EndpointName),
+			})
+
+			if err != nil {
+				return fmt.Errorf("failed to describe endpoint: %w", err)
+			}
+
+			status := output.EndpointStatus
+			fmt.Printf("Endpoint status: %s\n", status)
+
+			switch status {
+			case types.EndpointStatusInService:
+				return nil
+			case types.EndpointStatusFailed:
+				return fmt.Errorf("endpoint creation failed: %s", aws.ToString(output.FailureReason))
+			case types.EndpointStatusRollingBack:
+				return fmt.Errorf("endpoint is rolling back")
+			}
+		}
+	}
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src) //nolint:gosec // User's own files
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(dst, data, 0644) //nolint:gosec // Standard file permissions
 }
