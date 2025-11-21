@@ -1,0 +1,90 @@
+{{template "base" .}}
+
+{{define "content"}}
+<div class="hero">
+    <div class="container">
+        <h1>ML Model Catalog</h1>
+        <p class="hero-subtitle">Discover, manage, and deploy scientific machine learning models</p>
+
+        <div class="search-box-large">
+            <form action="/search" method="get">
+                <input type="text" name="q" placeholder="Search for models..." class="search-input-large">
+                <button type="submit" class="search-button">Search</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <section class="section">
+        <h2>Featured Models</h2>
+        <p class="section-subtitle">Popular and recently added models</p>
+
+        {{if .Models}}
+        <div class="model-grid">
+            {{range .Models}}
+            <div class="model-card">
+                <div class="model-card-header">
+                    <h3><a href="/model/{{.Name}}">{{.Name}}</a></h3>
+                    <span class="version-badge">v{{.LatestVersion}}</span>
+                </div>
+                <p class="model-description">{{.Description}}</p>
+                <div class="model-meta">
+                    <span class="meta-item">
+                        <span class="meta-icon">🏷️</span>
+                        {{.Domain}}
+                    </span>
+                    {{if .Stats}}
+                    <span class="meta-item">
+                        <span class="meta-icon">📊</span>
+                        {{.Stats.ViewCount}} views
+                    </span>
+                    {{end}}
+                </div>
+                <div class="model-tags">
+                    {{range .Tags}}
+                    <span class="tag">{{.}}</span>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>No models in catalog yet.</p>
+            <p class="help-text">Add your first model with: <code>conduit add model.yaml</code></p>
+        </div>
+        {{end}}
+
+        <div class="section-footer">
+            <a href="/browse" class="button button-secondary">Browse All Models →</a>
+        </div>
+    </section>
+
+    <section class="section features">
+        <h2>Features</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📦</div>
+                <h3>Model Catalog</h3>
+                <p>Local catalog with versioning, tags, and full-text search</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Team Collaboration</h3>
+                <p>Share models via remote registries with push/pull workflows</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🚀</div>
+                <h3>AWS Deployment</h3>
+                <p>One-command deployment to SageMaker with automatic Dockerfile generation</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>Fuzzy Search</h3>
+                <p>Find models even with typos using Levenshtein distance matching</p>
+            </div>
+        </div>
+    </section>
+</div>
+{{end}}
