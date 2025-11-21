@@ -1,0 +1,207 @@
+{{template "base" .}}
+
+{{define "content"}}
+<div class="container">
+    {{with .Model}}
+    <div class="model-detail-header">
+        <div>
+            <h1>{{.Name}}</h1>
+            <span class="version-badge-large">v{{.LatestVersion}}</span>
+        </div>
+        <div class="model-actions">
+            <button class="button button-primary" onclick="copyDeployCommand()">📋 Copy Deploy Command</button>
+        </div>
+    </div>
+
+    <p class="model-detail-description">{{.Description}}</p>
+
+    <div class="model-stats-bar">
+        {{if .Stats}}
+        <div class="stat-item">
+            <span class="stat-label">Deployments</span>
+            <span class="stat-value">{{.Stats.TotalDeployments}}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Predictions</span>
+            <span class="stat-value">{{.Stats.TotalPredictions}}</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Views</span>
+            <span class="stat-value">{{.Stats.ViewCount}}</span>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="model-detail-grid">
+        <div class="model-detail-main">
+            <section class="detail-section">
+                <h2>Model Information</h2>
+                <table class="info-table">
+                    <tr>
+                        <th>Domain</th>
+                        <td>{{.Domain}}</td>
+                    </tr>
+                    <tr>
+                        <th>Latest Version</th>
+                        <td>v{{.LatestVersion}}</td>
+                    </tr>
+                    {{if .GitHubRepo}}
+                    <tr>
+                        <th>Repository</th>
+                        <td><a href="https://{{.GitHubRepo}}" target="_blank">{{.GitHubRepo}}</a></td>
+                    </tr>
+                    {{end}}
+                    {{if .License}}
+                    <tr>
+                        <th>License</th>
+                        <td>{{.License}}</td>
+                    </tr>
+                    {{end}}
+                </table>
+            </section>
+
+            {{if .Tags}}
+            <section class="detail-section">
+                <h2>Tags</h2>
+                <div class="model-tags-large">
+                    {{range .Tags}}
+                    <a href="/browse?tags={{.}}" class="tag tag-large">{{.}}</a>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
+
+            {{if $.Versions}}
+            <section class="detail-section">
+                <h2>Version History</h2>
+                <div class="version-list">
+                    {{range $.Versions}}
+                    <div class="version-item {{if .IsLatest}}version-latest{{end}}">
+                        <div class="version-header">
+                            <span class="version-number">v{{.Version}}</span>
+                            {{if .IsLatest}}
+                            <span class="badge-latest">Latest</span>
+                            {{end}}
+                        </div>
+                        <div class="version-meta">
+                            <span>{{.Framework}}</span>
+                            {{if .GPURequired}}
+                            <span class="gpu-badge">🎮 GPU Required</span>
+                            {{end}}
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
+
+            {{if .Benchmarks}}
+            <section class="detail-section">
+                <h2>Benchmarks</h2>
+                <table class="info-table">
+                    <thead>
+                        <tr>
+                            <th>Dataset</th>
+                            <th>Metric</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Benchmarks}}
+                        <tr>
+                            <td>{{.Dataset}}</td>
+                            <td>{{.Metric}}</td>
+                            <td><strong>{{.Result}}</strong></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </section>
+            {{end}}
+        </div>
+
+        <aside class="model-detail-sidebar">
+            <div class="sidebar-card">
+                <h3>Quick Start</h3>
+                <div class="code-block">
+                    <pre><code># Add to catalog
+conduit add model.yaml
+
+# View details
+conduit info {{.Name}}
+
+# Deploy to AWS
+conduit deploy model.yaml</code></pre>
+                </div>
+                <button class="button button-block" onclick="copyQuickStart()">Copy Commands</button>
+            </div>
+
+            <div class="sidebar-card">
+                <h3>CLI Commands</h3>
+                <div class="command-list">
+                    <div class="command-item">
+                        <code>conduit info {{.Name}}</code>
+                        <span>View full details</span>
+                    </div>
+                    <div class="command-item">
+                        <code>conduit version list {{.Name}}</code>
+                        <span>List all versions</span>
+                    </div>
+                    <div class="command-item">
+                        <code>conduit export {{.Name}}</code>
+                        <span>Export to JSON</span>
+                    </div>
+                    <div class="command-item">
+                        <code>conduit push {{.Name}}</code>
+                        <span>Push to registry</span>
+                    </div>
+                </div>
+            </div>
+
+            {{if .Stats}}
+            {{if or .Stats.LastDeployed .Stats.LastViewed}}
+            <div class="sidebar-card">
+                <h3>Activity</h3>
+                <div class="activity-list">
+                    {{if .Stats.LastDeployed}}
+                    <div class="activity-item">
+                        <span class="activity-label">Last Deployed</span>
+                        <span class="activity-value">{{.Stats.LastDeployed}}</span>
+                    </div>
+                    {{end}}
+                    {{if .Stats.LastViewed}}
+                    <div class="activity-item">
+                        <span class="activity-label">Last Viewed</span>
+                        <span class="activity-value">{{.Stats.LastViewed}}</span>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+            {{end}}
+        </aside>
+    </div>
+    {{end}}
+</div>
+
+<script>
+function copyDeployCommand() {
+    const command = 'conduit deploy model.yaml';
+    navigator.clipboard.writeText(command);
+    alert('Deploy command copied to clipboard!');
+}
+
+function copyQuickStart() {
+    const commands = `# Add to catalog
+conduit add model.yaml
+
+# View details
+conduit info {{.Model.Name}}
+
+# Deploy to AWS
+conduit deploy model.yaml`;
+    navigator.clipboard.writeText(commands);
+    alert('Commands copied to clipboard!');
+}
+</script>
+{{end}}

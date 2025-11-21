@@ -1,0 +1,43 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">
+                <span class="logo-icon">⚡</span>
+                Conduit
+            </a>
+            <ul class="nav-links">
+                <li><a href="/">Home</a></li>
+                <li><a href="/browse">Browse</a></li>
+                <li><a href="/search">Search</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {{template "content" .}}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Conduit - ML Model Catalog</p>
+            <p>
+                <a href="https://github.com/scttfrdmn/conduit" target="_blank">GitHub</a> ·
+                <a href="https://github.com/scttfrdmn/conduit/issues" target="_blank">Issues</a> ·
+                <a href="https://github.com/scttfrdmn/conduit/blob/main/docs/getting-started.md" target="_blank">Docs</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
+{{end}}
